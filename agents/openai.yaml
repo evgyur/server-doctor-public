@@ -1,0 +1,4 @@
+version: 1
+display_name: Server Doctor
+short_description: Audits and repairs OpenClaw or Telegram bot hosts without exposing secrets.
+default_prompt: Audit this host for OpenClaw, Telegram bots, runtime ownership, service managers, logs, and safe restart paths. Keep the output public-safe and redact secrets, hostnames, addresses, and identifying details.
