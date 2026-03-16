@@ -1,0 +1,3 @@
+[submodule "tools/chip-docs-local"]
+	path = tools/chip-docs-local
+	url = ../chip-docs-local

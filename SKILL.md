@@ -241,6 +241,32 @@ For OpenClaw or Telegram incidents:
 6. verify restart path
 7. document impact, recovery, and remaining unknowns
 
+### Public OpenClaw docs mirror
+
+Prefer a local Markdown mirror of `https://docs.openclaw.ai` before falling back to live browsing when the repo checkout is available.
+
+Tooling:
+
+- submodule: `tools/chip-docs-local`
+- source manifest: `sources/openclaw.yaml`
+- refresh command from the repo root: `npm run sync-openclaw-docs`
+- materialized snapshot root: `references/openclaw-docs/`
+
+Expected mirror artifacts:
+
+- `references/openclaw-docs/current/`
+- `references/openclaw-docs/FILELIST.md`
+- `references/openclaw-docs/state.json`
+
+Operating rules:
+
+- if `tools/chip-docs-local` is missing, say that the local docs toolchain is unavailable instead of pretending the mirror exists
+- if dependencies are not installed in the submodule, run `npm --prefix tools/chip-docs-local install` before the sync command
+- use the local mirror as the default documentation source during diagnosis when it is present and fresh enough for the task
+- check `references/openclaw-docs/FILELIST.md` first for page discovery
+- if the mirror is missing or stale and local shell access exists, refresh it with `npm run sync-openclaw-docs`
+- if the refresh fails, say so plainly and fall back to live public docs
+
 Load these references when needed:
 
 - `references/openclaw-host-audit.md`

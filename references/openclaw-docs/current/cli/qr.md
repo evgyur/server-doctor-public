@@ -1,0 +1,704 @@
+<!-- Source: https://docs.openclaw.ai/cli/qr -->
+<!-- Title: qr - OpenClaw -->
+
+[Skip to main content](https://docs.openclaw.ai/cli/qr)
+
+[OpenClaw home page![light logo](https://mintcdn.com/clawdhub/dpADRo8IUoiDztzJ/assets/pixel-lobster.svg?fit=max&auto=format&n=dpADRo8IUoiDztzJ&q=85&s=8fdf719fb6d3eaad7c65231385bf28e5)![dark logo](https://mintcdn.com/clawdhub/dpADRo8IUoiDztzJ/assets/pixel-lobster.svg?fit=max&auto=format&n=dpADRo8IUoiDztzJ&q=85&s=8fdf719fb6d3eaad7c65231385bf28e5)](https://docs.openclaw.ai/)
+
+[Get started
+
+](https://docs.openclaw.ai/)[Install
+
+](https://docs.openclaw.ai/install)[Channels
+
+](https://docs.openclaw.ai/channels)[Agents
+
+](https://docs.openclaw.ai/pi)[Tools
+
+](https://docs.openclaw.ai/tools)[Models
+
+](https://docs.openclaw.ai/providers)[Platforms
+
+](https://docs.openclaw.ai/platforms)[Gateway & Ops
+
+](https://docs.openclaw.ai/gateway)[Reference
+
+](https://docs.openclaw.ai/cli)[Help
+
+](https://docs.openclaw.ai/help)
+
+##### CLI commands
+
+-   [
+    
+    CLI Reference
+    
+    
+    
+    ](https://docs.openclaw.ai/cli)
+-   [
+    
+    acp
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/acp)
+-   [
+    
+    agent
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/agent)
+-   [
+    
+    agents
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/agents)
+-   [
+    
+    approvals
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/approvals)
+-   [
+    
+    browser
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/browser)
+-   [
+    
+    channels
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/channels)
+-   [
+    
+    clawbot
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/clawbot)
+-   [
+    
+    completion
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/completion)
+-   [
+    
+    config
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/config)
+-   [
+    
+    configure
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/configure)
+-   [
+    
+    cron
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/cron)
+-   [
+    
+    daemon
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/daemon)
+-   [
+    
+    dashboard
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/dashboard)
+-   [
+    
+    devices
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/devices)
+-   [
+    
+    directory
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/directory)
+-   [
+    
+    dns
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/dns)
+-   [
+    
+    docs
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/docs)
+-   [
+    
+    doctor
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/doctor)
+-   [
+    
+    gateway
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/gateway)
+-   [
+    
+    health
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/health)
+-   [
+    
+    hooks
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/hooks)
+-   [
+    
+    logs
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/logs)
+-   [
+    
+    memory
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/memory)
+-   [
+    
+    message
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/message)
+-   [
+    
+    models
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/models)
+-   [
+    
+    node
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/node)
+-   [
+    
+    nodes
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/nodes)
+-   [
+    
+    onboard
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/onboard)
+-   [
+    
+    pairing
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/pairing)
+-   [
+    
+    plugins
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/plugins)
+-   [
+    
+    qr
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/qr)
+-   [
+    
+    reset
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/reset)
+-   [
+    
+    Sandbox CLI
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/sandbox)
+-   [
+    
+    secrets
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/secrets)
+-   [
+    
+    security
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/security)
+-   [
+    
+    sessions
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/sessions)
+-   [
+    
+    setup
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/setup)
+-   [
+    
+    skills
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/skills)
+-   [
+    
+    status
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/status)
+-   [
+    
+    system
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/system)
+-   [
+    
+    tui
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/tui)
+-   [
+    
+    uninstall
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/uninstall)
+-   [
+    
+    update
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/update)
+-   [
+    
+    voicecall
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/voicecall)
+-   [
+    
+    webhooks
+    
+    
+    
+    ](https://docs.openclaw.ai/cli/webhooks)
+
+##### RPC and API
+
+-   [
+    
+    RPC Adapters
+    
+    
+    
+    ](https://docs.openclaw.ai/reference/rpc)
+-   [
+    
+    Device Model Database
+    
+    
+    
+    ](https://docs.openclaw.ai/reference/device-models)
+
+##### Templates
+
+-   [
+    
+    Default AGENTS.md
+    
+    
+    
+    ](https://docs.openclaw.ai/reference/AGENTS.default)
+-   [
+    
+    AGENTS.md Template
+    
+    
+    
+    ](https://docs.openclaw.ai/reference/templates/AGENTS)
+-   [
+    
+    BOOT.md Template
+    
+    
+    
+    ](https://docs.openclaw.ai/reference/templates/BOOT)
+-   [
+    
+    BOOTSTRAP.md Template
+    
+    
+    
+    ](https://docs.openclaw.ai/reference/templates/BOOTSTRAP)
+-   [
+    
+    HEARTBEAT.md Template
+    
+    
+    
+    ](https://docs.openclaw.ai/reference/templates/HEARTBEAT)
+-   [
+    
+    IDENTITY
+    
+    
+    
+    ](https://docs.openclaw.ai/reference/templates/IDENTITY)
+-   [
+    
+    SOUL.md Template
+    
+    
+    
+    ](https://docs.openclaw.ai/reference/templates/SOUL)
+-   [
+    
+    TOOLS.md Template
+    
+    
+    
+    ](https://docs.openclaw.ai/reference/templates/TOOLS)
+-   [
+    
+    USER
+    
+    
+    
+    ](https://docs.openclaw.ai/reference/templates/USER)
+
+##### Technical reference
+
+-   [
+    
+    Wizard Reference
+    
+    
+    
+    ](https://docs.openclaw.ai/reference/wizard)
+-   [
+    
+    Token Use and Costs
+    
+    
+    
+    ](https://docs.openclaw.ai/reference/token-use)
+-   [
+    
+    SecretRef Credential Surface
+    
+    
+    
+    ](https://docs.openclaw.ai/reference/secretref-credential-surface)
+-   [
+    
+    Prompt Caching
+    
+    
+    
+    ](https://docs.openclaw.ai/reference/prompt-caching)
+-   [
+    
+    API Usage and Costs
+    
+    
+    
+    ](https://docs.openclaw.ai/reference/api-usage-costs)
+-   [
+    
+    Transcript Hygiene
+    
+    
+    
+    ](https://docs.openclaw.ai/reference/transcript-hygiene)
+-   [
+    
+    Date and Time
+    
+    
+    
+    ](https://docs.openclaw.ai/date-time)
+
+##### Concept internals
+
+-   [
+    
+    TypeBox
+    
+    
+    
+    ](https://docs.openclaw.ai/concepts/typebox)
+-   [
+    
+    Markdown Formatting
+    
+    
+    
+    ](https://docs.openclaw.ai/concepts/markdown-formatting)
+-   [
+    
+    Typing Indicators
+    
+    
+    
+    ](https://docs.openclaw.ai/concepts/typing-indicators)
+-   [
+    
+    Usage Tracking
+    
+    
+    
+    ](https://docs.openclaw.ai/concepts/usage-tracking)
+-   [
+    
+    Timezones
+    
+    
+    
+    ](https://docs.openclaw.ai/concepts/timezone)
+
+##### Project
+
+-   [
+    
+    Credits
+    
+    
+    
+    ](https://docs.openclaw.ai/reference/credits)
+
+##### Release policy
+
+-   [
+    
+    Release Policy
+    
+    
+    
+    ](https://docs.openclaw.ai/reference/RELEASING)
+-   [
+    
+    Tests
+    
+    
+    
+    ](https://docs.openclaw.ai/reference/test)
+
+##### Experiments
+
+-   [
+    
+    Kilo gateway integration
+    
+    
+    
+    ](https://docs.openclaw.ai/design/kilo-gateway-integration)
+-   [
+    
+    Onboarding and Config Protocol
+    
+    
+    
+    ](https://docs.openclaw.ai/experiments/onboarding-config-protocol)
+-   [
+    
+    ACP Thread Bound Agents
+    
+    
+    
+    ](https://docs.openclaw.ai/experiments/plans/acp-thread-bound-agents)
+-   [
+    
+    Unified Runtime Streaming Refactor Plan
+    
+    
+    
+    ](https://docs.openclaw.ai/experiments/plans/acp-unified-streaming-refactor)
+-   [
+    
+    Browser Evaluate CDP Refactor
+    
+    
+    
+    ](https://docs.openclaw.ai/experiments/plans/browser-evaluate-cdp-refactor)
+-   [
+    
+    OpenResponses Gateway Plan
+    
+    
+    
+    ](https://docs.openclaw.ai/experiments/plans/openresponses-gateway)
+-   [
+    
+    PTY and Process Supervision Plan
+    
+    
+    
+    ](https://docs.openclaw.ai/experiments/plans/pty-process-supervision)
+-   [
+    
+    Session Binding Channel Agnostic Plan
+    
+    
+    
+    ](https://docs.openclaw.ai/experiments/plans/session-binding-channel-agnostic)
+-   [
+    
+    Workspace Memory Research
+    
+    
+    
+    ](https://docs.openclaw.ai/experiments/research/memory)
+-   [
+    
+    Model Config Exploration
+    
+    
+    
+    ](https://docs.openclaw.ai/experiments/proposals/model-config)
+
+-   [openclaw qr](https://docs.openclaw.ai/cli/qr)
+-   [Usage](https://docs.openclaw.ai/cli/qr)
+-   [Options](https://docs.openclaw.ai/cli/qr)
+-   [Notes](https://docs.openclaw.ai/cli/qr)
+
+CLI commands
+
+# qr
+
+# 
+
+[​
+
+](https://docs.openclaw.ai/cli/qr)
+
+`openclaw qr`
+
+Generate an iOS pairing QR and setup code from your current Gateway configuration.
+
+## 
+
+[​
+
+](https://docs.openclaw.ai/cli/qr)
+
+Usage
+
+Copy
+
+```
+openclaw qr
+openclaw qr --setup-code-only
+openclaw qr --json
+openclaw qr --remote
+openclaw qr --url wss://gateway.example/ws
+```
+
+## 
+
+[​
+
+](https://docs.openclaw.ai/cli/qr)
+
+Options
+
+-   `--remote`: use `gateway.remote.url` plus remote token/password from config
+-   `--url <url>`: override gateway URL used in payload
+-   `--public-url <url>`: override public URL used in payload
+-   `--token <token>`: override which gateway token the bootstrap flow authenticates against
+-   `--password <password>`: override which gateway password the bootstrap flow authenticates against
+-   `--setup-code-only`: print only setup code
+-   `--no-ascii`: skip ASCII QR rendering
+-   `--json`: emit JSON (`setupCode`, `gatewayUrl`, `auth`, `urlSource`)
+
+## 
+
+[​
+
+](https://docs.openclaw.ai/cli/qr)
+
+Notes
+
+-   `--token` and `--password` are mutually exclusive.
+-   The setup code itself now carries an opaque short-lived `bootstrapToken`, not the shared gateway token/password.
+-   With `--remote`, if effectively active remote credentials are configured as SecretRefs and you do not pass `--token` or `--password`, the command resolves them from the active gateway snapshot. If gateway is unavailable, the command fails fast.
+-   Without `--remote`, local gateway auth SecretRefs are resolved when no CLI auth override is passed:
+    -   `gateway.auth.token` resolves when token auth can win (explicit `gateway.auth.mode="token"` or inferred mode where no password source wins).
+    -   `gateway.auth.password` resolves when password auth can win (explicit `gateway.auth.mode="password"` or inferred mode with no winning token from auth/env).
+-   If both `gateway.auth.token` and `gateway.auth.password` are configured (including SecretRefs) and `gateway.auth.mode` is unset, setup-code resolution fails until mode is set explicitly.
+-   Gateway version skew note: this command path requires a gateway that supports `secrets.resolve`; older gateways return an unknown-method error.
+-   After scanning, approve device pairing with:
+    -   `openclaw devices list`
+    -   `openclaw devices approve <requestId>`
+
+[plugins](https://docs.openclaw.ai/cli/plugins)[reset](https://docs.openclaw.ai/cli/reset)
+
+⌘I

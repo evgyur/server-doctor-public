@@ -1,0 +1,23 @@
+id: openclaw
+label: OpenClaw Docs
+startUrl: https://docs.openclaw.ai
+allowedDomains:
+  - docs.openclaw.ai
+sitemap:
+  - https://docs.openclaw.ai/sitemap.xml
+discovery:
+  include:
+    - /
+content:
+  titleSelector: title
+  rootSelectors:
+    - main
+    - article
+    - body
+  removeSelectors:
+    - nav
+    - footer
+    - script
+    - style
+output:
+  filelistTitle: OpenClaw Docs File List

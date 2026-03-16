@@ -1,0 +1,10 @@
+{
+  "name": "server-doctor-public",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync-openclaw-docs": "node scripts/sync-openclaw-docs.js",
+    "test:chip-docs-local": "npm --prefix tools/chip-docs-local test"
+  }
+}
