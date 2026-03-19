@@ -1,3 +1,6 @@
 [submodule "tools/chip-docs-local"]
 	path = tools/chip-docs-local
 	url = ../chip-docs-local
+[submodule "chip-mac-mini"]
+	path = chip-mac-mini
+	url = ../chip-mac-mini
