@@ -2,9 +2,29 @@
 
 Use this reference when a Telegram bot is slow, unresponsive, partially working, or failing after startup.
 
+Before making strong health, outage, or recovery claims, also read:
+
+- `references/health-claims-and-evidence.md`
+- `references/outage-classification.md`
+
+## Claim discipline
+
+- separate spec correctness from ops quality
+- confirm the canonical runtime target before strong health wording:
+  - host
+  - owner
+  - unit, launch agent, container, or process tree
+  - runtime directory or state directory
+  - live port, socket, or endpoint
+- treat permission-limited visibility as `visibility-limited` or `unknown`, not outage proof
+- direct live probes and canonical runtime health beat stale legacy checks unless a stronger contradiction appears
+- restart alone is not recovery; require post-action proof
+
 ## Symptom buckets
 
 ### 1. Process is down
+
+Only use this bucket after the canonical target is confirmed.
 
 Checks:
 
@@ -70,6 +90,8 @@ Check:
 3. Restart the smallest failing component first.
 4. Verify the gateway only after dependencies are healthy.
 5. Re-test with a known-safe command.
+
+Do not call recovery confirmed until a post-action live probe succeeds on the canonical path.
 
 ## Concrete scenarios
 

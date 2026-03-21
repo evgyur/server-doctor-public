@@ -24,6 +24,22 @@ If the operator cannot show where the bots live or cannot provide a safe way to 
 
 The skill should therefore start by building an environment map and an access map before attempting deeper diagnosis or repair.
 
+Operational diagnosis must separate:
+
+- spec correctness:
+  - correct host, runtime, owner, and service target
+  - correct source of truth
+  - current direct evidence
+  - wording that matches only what the evidence proves
+- ops quality:
+  - healthy
+  - degraded
+  - partial failure
+  - unstable
+  - down
+
+Do not jump from partial visibility or target uncertainty straight to outage language.
+
 ## Primary goals
 
 1. Build a usable map of hosts, local machines, bots, runtimes, and safe access paths.
@@ -235,18 +251,34 @@ For OpenClaw or Telegram incidents:
 
 1. confirm which host or local machine owns the failing runtime
 2. confirm that a safe access path actually exists
-3. confirm whether the main process is running
-4. inspect recent logs
-5. classify the failure before changing anything major:
+3. read `references/health-claims-and-evidence.md` before making strong health or outage claims
+4. read `references/outage-classification.md` when you need to label health state, degradation, recovery, or escalation level
+5. confirm the canonical runtime target before strong claims:
+   - host
+   - owner
+   - unit, launch agent, container, or process tree
+   - runtime directory or state directory
+   - live port, socket, or endpoint
+6. confirm whether the main process is running
+7. inspect recent logs
+8. classify the failure before changing anything major:
    - process down
    - Telegram transport broken
    - auth or model fallback
    - queue starvation or provider delay
    - bootstrap bloat or startup tax
    - dependency failure
-6. identify whether failure is transport, auth, upstream model, Telegram delivery, dependency, or operator-access related
-7. verify restart path
-8. document impact, recovery, and remaining unknowns
+9. identify whether failure is transport, auth, upstream model, Telegram delivery, dependency, or operator-access related
+10. verify restart path
+11. document impact, recovery, and remaining unknowns
+
+Claim discipline:
+
+- incomplete visibility is not outage proof
+- direct live probe beats stale legacy checks unless a stronger contradiction appears
+- wrong runtime path, old port, duplicate runtime, or mirror copy must be ruled out before outage wording
+- degraded, partial failure, unstable, and down are distinct labels
+- restart alone is not recovery
 
 Read `references/openclaw-incident-response.md` for concrete public-safe scenarios including:
 
@@ -296,6 +328,8 @@ Operating rules:
 Load these references when needed:
 
 - `references/openclaw-host-audit.md`
+- `references/health-claims-and-evidence.md`
+- `references/outage-classification.md`
 - `references/openclaw-incident-response.md`
 
 ## Output expectations
