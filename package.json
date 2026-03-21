@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "sync-openclaw-docs": "node scripts/sync-openclaw-docs.js",
+    "test": "python3 -m unittest tests.test_normalize_openclaw_models && bash tests/test-openclaw-auth-profile-sync.sh && bash tests/test-openclaw-telegram-transport-hotfix.sh && node --test tests/macos-single-openclaw-runtime.test.js",
     "test:chip-docs-local": "npm --prefix tools/chip-docs-local test"
   }
 }

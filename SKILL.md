@@ -256,6 +256,17 @@ Read `references/openclaw-incident-response.md` for concrete public-safe scenari
 - bootstrap-bloat and startup-tax
 - duplicate OpenClaw runtime on macOS
 
+Public helper scripts in this repo:
+
+- `scripts/normalize-openclaw-models.py`
+  - normalize model defaults and optional per-agent bindings
+- `scripts/openclaw-auth-profile-sync.sh`
+  - inspect, sync, and validate per-agent auth-profile drift for a chosen profile id
+- `scripts/openclaw-telegram-transport-hotfix.sh`
+  - re-apply a host-local Telegram transport compatibility patch after updates
+- `scripts/macos-single-openclaw-runtime.sh`
+  - collapse a macOS host back to one canonical OpenClaw runtime
+
 ### Public OpenClaw docs mirror
 
 Prefer a local Markdown mirror of `https://docs.openclaw.ai` before falling back to live browsing when the repo checkout is available.

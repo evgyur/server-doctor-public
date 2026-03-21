@@ -97,6 +97,7 @@ rg -n 'unsupported|unknown model|fallback' ~/.openclaw/logs /tmp/openclaw 2>/dev
 - identify which session still carries the old override
 - clear or replace that override with a supported model
 - restart the gateway only if the runtime does not pick up the state change cleanly
+- if the main defaults are wrong as well, normalize them first with a targeted config edit or a helper such as `scripts/normalize-openclaw-models.py`
 
 #### Validation
 
@@ -135,6 +136,14 @@ Manually compare the same profile id across agent auth stores:
 - sync drifted agents to that profile
 - clear stale auth cooldown state only for the affected provider/profile
 - back up every modified auth store before writing changes
+
+Public helper:
+
+```bash
+./scripts/openclaw-auth-profile-sync.sh --dry-run --host <ssh-host> --profile-id <provider:profile>
+./scripts/openclaw-auth-profile-sync.sh --apply --host <ssh-host> --profile-id <provider:profile>
+./scripts/openclaw-auth-profile-sync.sh --validate --host <ssh-host> --profile-id <provider:profile>
+```
 
 #### Validation
 
@@ -175,6 +184,14 @@ Also compare:
 - avoid broad rewrites while transport is already unstable
 - document clearly when a patch is local containment rather than a universal upstream fix
 
+Public helper:
+
+```bash
+./scripts/openclaw-telegram-transport-hotfix.sh --dry-run --host <ssh-host>
+./scripts/openclaw-telegram-transport-hotfix.sh --apply --host <ssh-host>
+./scripts/openclaw-telegram-transport-hotfix.sh --validate --host <ssh-host>
+```
+
 #### Validation
 
 - gateway runtime is healthy after restart
@@ -213,6 +230,17 @@ Questions to answer:
 - keep bootstrap files short and role-specific
 - move incident-response, host-ops, and domain-specific playbooks out of startup files
 - keep only the minimum session-start routing, safety, and index information in bootstrap context
+- if defaults and agent bindings are part of the drift, use a narrow config-normalization helper instead of broad manual rewrites
+
+Public helper example:
+
+```bash
+python3 ./scripts/normalize-openclaw-models.py ~/.openclaw/openclaw.json \
+  --primary <provider/model> \
+  --fallback <provider/model> \
+  --alias <alias> \
+  --agent-id <agent-id>
+```
 
 #### Validation
 
@@ -248,6 +276,13 @@ Also verify the Node runtime used by the active LaunchAgent and compare it with 
 - reinstall or re-register the gateway from that canonical runtime
 - remove or disable duplicate installs and stale shims
 - verify that launchd and interactive shells now resolve to the same intended runtime
+
+Public helper:
+
+```bash
+./scripts/macos-single-openclaw-runtime.sh --dry-run
+./scripts/macos-single-openclaw-runtime.sh --apply
+```
 
 #### Validation
 
