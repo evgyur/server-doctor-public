@@ -237,9 +237,24 @@ For OpenClaw or Telegram incidents:
 2. confirm that a safe access path actually exists
 3. confirm whether the main process is running
 4. inspect recent logs
-5. identify whether failure is transport, auth, upstream model, Telegram delivery, dependency, or operator-access related
-6. verify restart path
-7. document impact, recovery, and remaining unknowns
+5. classify the failure before changing anything major:
+   - process down
+   - Telegram transport broken
+   - auth or model fallback
+   - queue starvation or provider delay
+   - bootstrap bloat or startup tax
+   - dependency failure
+6. identify whether failure is transport, auth, upstream model, Telegram delivery, dependency, or operator-access related
+7. verify restart path
+8. document impact, recovery, and remaining unknowns
+
+Read `references/openclaw-incident-response.md` for concrete public-safe scenarios including:
+
+- stale session model override
+- per-agent auth-profile drift
+- post-update Telegram transport regression
+- bootstrap-bloat and startup-tax
+- duplicate OpenClaw runtime on macOS
 
 ### Public OpenClaw docs mirror
 
