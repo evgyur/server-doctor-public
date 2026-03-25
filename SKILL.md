@@ -287,6 +287,7 @@ Read `references/openclaw-incident-response.md` for concrete public-safe scenari
 - post-update Telegram transport regression
 - bootstrap-bloat and startup-tax
 - duplicate OpenClaw runtime on macOS
+- macOS LaunchAgent drift after OpenClaw update (wrapper replaced, secrets duplicated, proxy env leaked)
 
 Public helper scripts in this repo:
 
@@ -298,6 +299,13 @@ Public helper scripts in this repo:
   - re-apply a host-local Telegram transport compatibility patch after updates
 - `scripts/macos-single-openclaw-runtime.sh`
   - collapse a macOS host back to one canonical OpenClaw runtime
+
+When the target is a macOS LaunchAgent install, include these checks after any `openclaw update` or package refresh:
+
+- inspect `ProgramArguments` to see whether the updater replaced a host-local wrapper with direct `node .../dist/entry.js`
+- inspect `EnvironmentVariables` for duplicated secrets that should still live only in `~/.openclaw/.env`
+- inspect live launchd env for `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` drift and verify `NO_PROXY` still covers `api.telegram.org`
+- verify `openclaw status --deep` rather than trusting only `gateway status`, because RPC can stay green while Telegram is degraded
 
 ### Public OpenClaw docs mirror
 

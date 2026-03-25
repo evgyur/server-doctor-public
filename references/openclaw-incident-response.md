@@ -199,12 +199,36 @@ Also compare:
 - whether installed `dist/` bundles changed recently
 - whether the regression started exactly after a refresh event
 
+On macOS LaunchAgent installs, also check whether the update replaced the startup path or leaked proxy env into Telegram traffic:
+
+```bash
+plutil -p ~/Library/LaunchAgents/ai.openclaw.gateway.plist 2>/dev/null | sed -n '1,160p'
+launchctl print gui/$UID/ai.openclaw.gateway 2>/dev/null | grep -E 'Program|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY|no_proxy'
+```
+
+Red flags:
+
+- `ProgramArguments` now point directly to `node .../openclaw/dist/entry.js` instead of the host-local wrapper that used to harden env startup
+- the LaunchAgent plist now contains duplicated provider or bot secrets that previously lived only in `~/.openclaw/.env`
+- launchd injects `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` and `NO_PROXY` no longer includes `api.telegram.org`
+- `openclaw status --deep` shows `Telegram WARN` while `curl https://api.telegram.org` and a direct token `getMe` probe from the host still succeed
+- logs show `deleteWebhook`, `deleteMyCommands`, `setMyCommands`, or `This operation was aborted` immediately after the update
+
 #### Recovery
 
 - first check whether the new upstream build already includes an equivalent fix
 - if not, re-apply the minimal host-local compatibility patch required for that environment
 - avoid broad rewrites while transport is already unstable
 - document clearly when a patch is local containment rather than a universal upstream fix
+
+For macOS LaunchAgent drift after update:
+
+- keep the new OpenClaw version if the runtime itself is healthy
+- restore a wrapper startup path that sources `~/.openclaw/.env` instead of duplicating secrets into the plist
+- clear `HTTP_PROXY`, `HTTPS_PROXY`, and `ALL_PROXY` inside the wrapper before starting OpenClaw
+- set `NO_PROXY` and `no_proxy` to include `api.telegram.org,127.0.0.1,localhost`
+- reload the LaunchAgent and validate with both `openclaw gateway status` and `openclaw status --deep`
+- if logs show repeated Telegram native-command churn or `BOT_COMMANDS_TOO_MUCH`, either reduce commands or set `channels.telegram.commands.native=false`
 
 Public helper:
 
@@ -219,6 +243,8 @@ Public helper:
 - gateway runtime is healthy after restart
 - Telegram provider starts normally
 - no immediate recurrence of the outbound transport errors in a control window longer than the old stall interval
+- on macOS, the active LaunchAgent no longer stores provider secrets directly in `EnvironmentVariables`
+- on macOS, a fresh `openclaw status --deep` shows `Telegram OK` after the wrapper/env recovery
 
 ### 8. Bootstrap-bloat and startup-tax
 
