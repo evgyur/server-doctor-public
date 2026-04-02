@@ -269,8 +269,9 @@ For OpenClaw or Telegram incidents:
    - bootstrap bloat or startup tax
    - dependency failure
 9. identify whether failure is transport, auth, upstream model, Telegram delivery, dependency, or operator-access related
-10. verify restart path
-11. document impact, recovery, and remaining unknowns
+10. if the symptom matches a known narrow remediation in `references/openclaw-incident-response.md`, explicitly offer to apply that remediation instead of stopping at diagnosis
+11. verify restart path
+12. document impact, recovery, and remaining unknowns
 
 Claim discipline:
 
@@ -288,6 +289,14 @@ Read `references/openclaw-incident-response.md` for concrete public-safe scenari
 - bootstrap-bloat and startup-tax
 - duplicate OpenClaw runtime on macOS
 - macOS LaunchAgent drift after OpenClaw update (wrapper replaced, secrets duplicated, proxy env leaked)
+- post-update elevated approval drift caused by global vs per-agent `tools.elevated` policy
+
+When a known scenario has a narrow fix path, prefer language like:
+
+- `I found the likely cause and can apply the narrow fix now.`
+- `I can align the intended agent instead of widening access globally.`
+
+Do not stop at pure diagnosis when the likely remediation is already clear and low-risk.
 
 Public helper scripts in this repo:
 

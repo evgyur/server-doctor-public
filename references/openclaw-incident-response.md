@@ -593,6 +593,21 @@ Confirm:
 - if behavior drift appeared after an update or routing change, align the intended agent policy instead of widening elevated access everywhere
 - keep the fix narrow: adjust the relevant agent or allowlist rather than opening elevated globally without need
 
+#### Operator guidance
+
+When this pattern is detected, `server-doctor` should proactively offer the fix instead of stopping at diagnosis.
+
+Recommended wording:
+
+- `I found elevated policy drift between the global config and the selected agent. I can align the intended agent so approvals stop appearing on every elevated action while keeping stricter agents strict.`
+- `This does not look like an agents.defaults.elevatedDefault issue. It looks like per-agent elevated policy drift. I can patch the intended agent's tools.elevated settings narrowly instead of opening elevated everywhere.`
+
+Default action bias:
+
+- if the operator's intent is clear and the target agent is unambiguous, propose the narrow policy alignment as the next step
+- prefer fixing the intended agent's `tools.elevated` configuration over broad global widening
+- call out explicitly when the stricter behavior on other agents should remain unchanged
+
 #### Validation
 
 - the same sender now sees consistent elevated behavior on the intended agent
