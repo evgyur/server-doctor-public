@@ -338,6 +338,104 @@ Public helper:
 - duplicate installs are gone or fully inactive
 - `openclaw gateway status` and a real control command behave consistently after restart
 
+### 10. Runtime bundle corruption or partial package replacement
+
+#### Symptoms
+
+- gateway fails with `MODULE_NOT_FOUND` or keeps surfacing a new missing chunk after each attempted fix
+- the service can be revived only by temporarily pointing it at a different local OpenClaw install
+- the intended install tree exists, but its `dist/` bundle looks suspiciously incomplete
+
+#### Why this happens
+
+This is usually not a one-file breakage.
+
+A manual copy, interrupted update, partial rollback, or local experiment can leave the canonical OpenClaw package only half-restored. In that state, restoring one missing entrypoint often just reveals the next missing compiled chunk.
+
+#### Checks
+
+Confirm the canonical runtime first, then inspect whether the installed bundle is complete enough to be believable:
+
+```bash
+systemctl --user cat openclaw-gateway 2>/dev/null | sed -n '1,160p'
+openclaw gateway status
+find /path/to/canonical/openclaw/dist -type f | wc -l
+ls -lah /path/to/canonical/openclaw/dist | sed -n '1,80p'
+```
+
+Also compare:
+
+- the `ExecStart` path in the active unit or launch agent
+- the live PID command line after restart
+- whether a nearby package backup or fresh reinstall contains far more runtime files than the broken tree
+- whether the next boot failure keeps changing from one missing module to another
+
+Red flags:
+
+- the active service points at one runtime tree, but emergency recovery keeps using another
+- `dist/` contains only a handful of files when a full package should contain many generated chunks
+- restoring one file only changes the missing-module error to a different file
+
+#### Recovery
+
+- do not normalize the emergency alternate runtime path as the final fix
+- do not start with one-file restore unless the breakage is proven to be isolated
+- restore or reinstall the entire canonical OpenClaw package from a trusted same-version build or local package backup
+- point the service back to the canonical runtime only after the full package is restored
+- restart and validate from the canonical path, not just the temporary workaround path
+
+#### Validation
+
+- the canonical service is `active`
+- `openclaw gateway status` is healthy on the intended runtime
+- the live PID command line matches the canonical install path
+- provider startup no longer fails on shifting `MODULE_NOT_FOUND` errors
+
+### 11. Plugin runtime contract drift after restart or update
+
+#### Symptoms
+
+- the gateway stays up, but one plugin, bound thread, or channel-specific feature goes silent
+- logs show plugin exceptions such as `Cannot read properties of undefined (...)`
+- the failure clusters around channel helpers like typing, send, topic rename, or other runtime-specific helpers
+- broad transport checks look healthy while one plugin path still fails
+
+#### Why this happens
+
+A plugin can depend on runtime helper surfaces that are optional, moved, or changed across OpenClaw versions and host environments.
+
+That creates a dangerous partial-failure pattern: the gateway is alive enough to receive the event, but the plugin crashes when it touches a helper that is no longer present in the live runtime contract.
+
+#### Checks
+
+```bash
+openclaw gateway status
+rg -n 'Cannot read properties of undefined|failed to load plugin|plugin.*error|message:transcribed|message:preprocessed' ~/.openclaw/logs /tmp/openclaw 2>/dev/null
+rg -n 'runtime\.channel\.|typing\.|sendMessage|renameTopic|resolve.*Token' /path/to/plugin/source /path/to/plugin/runtime 2>/dev/null
+```
+
+Ask these questions:
+
+- is the gateway healthy while only one plugin path fails
+- does the plugin assume a channel-specific runtime object always exists
+- did the issue start right after a restart, update, redeploy, or host move
+- was only the live deployed copy patched while the source tree stayed stale, or vice versa
+
+#### Recovery
+
+- treat this as a plugin compatibility incident, not automatically as a full transport outage
+- replace hard assumptions about channel-specific runtime helpers with compatibility fallbacks where possible
+- prefer stable plugin SDK helpers or generic APIs over host-specific runtime import paths
+- wrap non-critical hook boundaries so one bad event degrades locally instead of crashing the whole plugin path
+- if the environment has both a deployed runtime copy and a source repo, patch both or the regression will return on the next deploy
+
+#### Validation
+
+- gateway restarts cleanly
+- fresh logs no longer show the `undefined` helper crash pattern
+- the previously silent bound thread or plugin feature replies again on a real control path
+- the maintained source tree passes its relevant tests or build checks
+
 ## What to avoid
 
 - do not rotate secrets during first response unless compromise is suspected
