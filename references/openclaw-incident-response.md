@@ -548,6 +548,57 @@ Avoid:
 - `Healthy.` based only on `systemctl active`
 - `Fixed.` when only a shallow probe is green
 
+### 14. Post-update elevated approval drift: global vs per-agent gating
+
+#### Symptoms
+
+- after an update, one chat or one agent suddenly asks for approval on nearly every elevated action
+- another chat on the same host still runs elevated commands without the same friction
+- the operator suspects `agents.defaults.elevatedDefault`, but changing or inspecting it does not explain the difference
+
+#### Why this happens
+
+In current OpenClaw setups, elevated execution is usually controlled by global and per-agent `tools.elevated` policy, not by assuming that `agents.defaults.elevatedDefault` is the deciding switch.
+
+That means behavior can differ by agent even on the same host:
+
+- global `tools.elevated` defines the baseline capability
+- per-agent `tools.elevated` can further restrict that capability
+- sender allowlists under `tools.elevated.allowFrom.<channel>` can differ between the global policy and the agent-specific override
+
+So a post-update approval surprise is often an agent-routing or agent-policy issue, not a missing default toggle.
+
+#### Checks
+
+Look at both the global and per-agent policy, and verify which agent actually handled the request:
+
+```bash
+rg -n 'elevatedDefault|tools\.elevated|allowFrom' ~/.openclaw/openclaw.json 2>/dev/null
+openclaw gateway status
+```
+
+Confirm:
+
+- whether `agents.defaults.elevatedDefault` is actually set
+- whether global `tools.elevated.enabled` is on
+- whether global `tools.elevated.allowFrom.<channel>` includes the intended sender class
+- whether the selected agent has its own `tools.elevated` block that narrows access
+- whether the request was routed to a different agent after the update
+
+#### Recovery
+
+- do not assume `agents.defaults.elevatedDefault` is the root cause
+- first identify which agent handled the request
+- compare the global elevated policy with that agent's own `tools.elevated` override
+- if behavior drift appeared after an update or routing change, align the intended agent policy instead of widening elevated access everywhere
+- keep the fix narrow: adjust the relevant agent or allowlist rather than opening elevated globally without need
+
+#### Validation
+
+- the same sender now sees consistent elevated behavior on the intended agent
+- a different agent with stricter policy stays strict if that is intentional
+- approval prompts now match the configured policy instead of surprising the operator
+
 ## What to avoid
 
 - do not rotate secrets during first response unless compromise is suspected
