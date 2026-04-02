@@ -436,6 +436,118 @@ Ask these questions:
 - the previously silent bound thread or plugin feature replies again on a real control path
 - the maintained source tree passes its relevant tests or build checks
 
+### 12. Duplicate runtimes, duplicate supervisors, or wrong-target diagnosis
+
+#### Symptoms
+
+- one health check says the gateway is healthy, but Telegram or another user-facing path still shows polling conflicts, stale behavior, or inconsistent results
+- manual restarts appear to help briefly, but the same transport conflict or duplicate-listener symptom comes back
+- shell commands and service-manager state appear to point at different OpenClaw installs, ports, or launch targets
+
+#### Why this happens
+
+Some hosts accidentally end up with two OpenClaw runtimes or two supervisors managing the same environment.
+
+Common patterns:
+
+- user-level service plus system-level service
+- launch agent plus manual shell process
+- old install plus new install on different paths
+- two runtimes sharing one state directory or one Telegram token
+
+This creates false diagnosis loops. One runtime can look healthy while the other is the one actually colliding, polling, or serving stale behavior.
+
+#### Checks
+
+Confirm the canonical target first, then verify that there is only one active owner for the affected runtime and state:
+
+```bash
+ps -ef | grep -Ei 'openclaw|gateway' | grep -v grep
+ss -tulpn | grep -Ei 'openclaw|127\.0\.0\.1:'
+systemctl --user status openclaw-gateway --no-pager -l 2>/dev/null
+systemctl status openclaw-gateway --no-pager -l 2>/dev/null
+```
+
+Also compare:
+
+- `which -a openclaw`
+- the active service `ExecStart`
+- the live PID command line
+- the active listener ports
+- the runtime directory or shared state directory used by each process
+
+Red flags:
+
+- two OpenClaw process trees at the same time
+- one manager reports healthy while another still owns a conflicting process
+- the shell CLI resolves to one install while the service uses another
+- duplicate runtimes share one state directory or the same transport credentials
+
+#### Recovery
+
+- choose one canonical runtime path and one canonical supervisor
+- disable or remove the duplicate runtime or duplicate supervisor before changing auth, transport, or plugin code
+- re-check listeners and process trees after the stop action; do not assume disable alone removed the old runtime
+- only after duplication is gone should you continue with transport or provider debugging
+
+#### Validation
+
+- exactly one intended OpenClaw runtime remains active for the affected environment
+- the canonical service manager view, PID path, and listener ports agree with each other
+- fresh logs no longer show duplicate-polling or duplicate-runtime conflict symptoms
+- a real control probe behaves consistently after restart
+
+### 13. Recovery validation: prove the fix on the real path
+
+#### Symptoms
+
+- the unit is `active`, but users still report silence, delays, or partial failures
+- logs are quieter after restart, but there is no end-to-end proof that the broken path works again
+- the operator is tempted to declare success based only on service-manager green state
+
+#### Why this matters
+
+Restart is an action, not evidence.
+
+OpenClaw incidents often recover partially: the main process comes back, but the original broken path may still be jammed, misrouted, degraded, or attached to the wrong runtime.
+
+#### Minimum validation ladder
+
+Use the strongest available post-fix proof in this order:
+
+1. real user-facing probe on the originally broken path
+2. canonical gateway health or RPC check
+3. matching process-manager and listener state
+4. fresh logs that stay clean during a short control window
+
+#### Checks
+
+```bash
+openclaw gateway status
+journalctl --user -u openclaw-gateway --since '-5 min' --no-pager 2>/dev/null | tail -n 120
+```
+
+Then verify all of these where applicable:
+
+- the originally broken chat, plugin path, or transport action now succeeds
+- the canonical runtime path is the one actually serving
+- no immediate recurrence appears in the first control window after restart
+- residual degradation is called out explicitly instead of hidden behind a green status
+
+#### Recovery wording rules
+
+Allowed:
+
+- `The service is back on the canonical runtime, but end-to-end recovery is still being verified.`
+- `Availability recovered; one degraded path is still being watched.`
+- `Restart succeeded, but recovery is not confirmed until the real control probe passes.`
+
+Avoid:
+
+- `Recovered.` immediately after restart
+- `Healthy.` based only on `systemctl active`
+- `Fixed.` when only a shallow probe is green
+
 ## What to avoid
 
 - do not rotate secrets during first response unless compromise is suspected
