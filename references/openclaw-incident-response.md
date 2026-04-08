@@ -246,6 +246,124 @@ Public helper:
 - on macOS, the active LaunchAgent no longer stores provider secrets directly in `EnvironmentVariables`
 - on macOS, a fresh `openclaw status --deep` shows `Telegram OK` after the wrapper/env recovery
 
+### 7a. Multi-install path drift between shell CLI and gateway service
+
+#### Symptoms
+
+- `openclaw doctor` or `openclaw memory index` behaves differently depending on how the command is invoked
+- shell `openclaw --version` and the running gateway appear to disagree about the installed build
+- plugin or config validation errors appear in one command path but not in the live runtime
+
+#### Why this happens
+
+Some hosts end up with more than one OpenClaw install tree after partial updates or mixed package-manager usage. The shell CLI, service unit, and explicit binary paths can silently resolve to different installs.
+
+#### Checks
+
+```bash
+command -v openclaw
+readlink -f "$(command -v openclaw)"
+readlink -f /usr/local/bin/openclaw 2>/dev/null || true
+readlink -f /opt/node-v22.22.0/bin/openclaw 2>/dev/null || true
+openclaw --version
+/usr/local/bin/openclaw --version 2>/dev/null || true
+/opt/node-v22.22.0/bin/openclaw --version 2>/dev/null || true
+systemctl --user show openclaw-gateway -p ExecStart
+```
+
+#### Recovery
+
+- choose one canonical install root and keep both CLI and gateway on that same tree
+- do not treat a second live install root as "the new canon" just because it became first on `PATH`
+- if needed, repoint shell launchers or service entrypoints so all command paths resolve to the same package tree
+
+Example fix pattern:
+
+```bash
+ln -sf /opt/node-v22.22.0/bin/openclaw ~/.npm-global/bin/openclaw
+systemctl --user daemon-reload
+systemctl --user restart openclaw-gateway
+```
+
+#### Validation
+
+- shell `openclaw` and the service `ExecStart` resolve to the same install root
+- `openclaw doctor` no longer warns that the gateway entrypoint differs from the current install
+- the previously inconsistent subcommand behaves the same through both shell and service-backed paths
+
+### 7b. Post-update canonical-root discipline
+
+#### Symptoms
+
+- an update "works", but later hotfixes, plugin checks, or memory tooling hit the wrong install tree
+- package refreshes silently reintroduce split-brain runtime state
+
+#### Why this happens
+
+The real problem is not the update itself but the loss of a single canonical OpenClaw root. Once two live roots exist again, diagnostics and repairs stop being trustworthy.
+
+#### Checks
+
+```bash
+command -v openclaw
+readlink -f "$(command -v openclaw)"
+systemctl --user show openclaw-gateway -p ExecStart
+openclaw gateway status
+```
+
+Confirm:
+
+- shell CLI points at the intended root
+- the running gateway service points at the same root
+- explicit binary paths do not resolve to a different OpenClaw package tree
+
+#### Recovery
+
+- keep one canonical install root after every package update
+- treat any second active root as drift
+- update launchers and units immediately before calling the update healthy
+
+#### Validation
+
+- shell CLI, service unit, and live runtime all resolve to one install tree
+- update-related diagnostics no longer disagree by invocation path
+
+### 7c. Safe dedupe when a bundled plugin is also loaded from config
+
+#### Symptoms
+
+- `openclaw doctor` warns about a duplicate plugin id
+- the same plugin appears both as bundled and as a config-loaded path install
+
+#### Why this happens
+
+A plugin that is now bundled with OpenClaw may still be explicitly loaded from an older custom path or install record. That creates duplicate-plugin warnings and makes plugin origin ambiguous.
+
+#### Checks
+
+```bash
+rg -n '"load"|"entries"|"installs"' ~/.openclaw/openclaw.json 2>/dev/null
+openclaw doctor
+```
+
+Look for:
+
+- a `plugins.load.paths` entry that points at a bundled plugin path
+- a matching `plugins.installs.<plugin-id>` record for the same legacy path
+- an existing `plugins.entries.<plugin-id>` block that only contains desired config
+
+#### Recovery
+
+- remove only the legacy path-loaded override and the matching install record
+- keep the plugin's config entry if it is still needed for the bundled plugin
+- do not remove the bundled plugin or its config block just to silence the warning
+
+#### Validation
+
+- `openclaw doctor` no longer reports the duplicate plugin id
+- the plugin still loads normally from the bundled runtime
+- plugin-specific config remains in effect after restart
+
 ### 8. Bootstrap-bloat and startup-tax
 
 #### Symptoms
