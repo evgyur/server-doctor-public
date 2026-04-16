@@ -304,6 +304,8 @@ Public helper scripts in this repo:
   - normalize model defaults and optional per-agent bindings
 - `scripts/openclaw-auth-profile-sync.sh`
   - inspect, sync, and validate per-agent auth-profile drift for a chosen profile id
+- `scripts/openclaw-bootstrap-hygiene.sh`
+  - inspect and normalize bootstrap drift in `AGENTS.md` and `TOOLS.md`
 - `scripts/openclaw-telegram-transport-hotfix.sh`
   - re-apply a host-local Telegram transport compatibility patch after updates
 - `scripts/macos-single-openclaw-runtime.sh`
@@ -344,10 +346,12 @@ Operating rules:
 
 Load these references when needed:
 
+- `references/routine-admin.md`
 - `references/openclaw-host-audit.md`
 - `references/health-claims-and-evidence.md`
 - `references/outage-classification.md`
 - `references/openclaw-incident-response.md`
+- `references/security-forensics.md`
 
 ## Output expectations
 

@@ -110,6 +110,27 @@ If any of these are uncertain, downgrade the claim language.
 
 Never let a weaker probe casually outrank a stronger one.
 
+### Chat-specific message claims
+
+For claims like `message 7371 reached the agent`, `the bot processed this voice note`, or `the delay was caused by transcription`, require direct per-message evidence.
+
+Minimum acceptable evidence:
+
+- the exact `message_id` is present in the relevant session transcript, or
+- the exact `message_id` appears in current runtime logs or store records tied to the same chat
+
+Not sufficient:
+
+- nearby messages from the same chat
+- a later assistant reply in the same session
+- generic provider or transport errors in the same time window
+- inference from another voice, media, or transcription failure
+
+Allowed wording when the exact trace is missing:
+
+- `I do not yet have proof that message 7371 reached the agent.`
+- `Current evidence is insufficient to say whether the bot processed that message or dropped it earlier in the path.`
+
 ### Recovery confirmation
 
 Do not claim recovery on restart alone.
@@ -165,6 +186,7 @@ Prefer the weakest wording that is fully supported.
 - [ ] Wrong unit, mirror path, old port, duplicate runtime, or backup service probe produces `wrong target` or `misconfigured check`, not outage
 - [ ] Restart without a post-fix probe does not produce `recovered`
 - [ ] Live endpoint with high latency or jammed queue produces `degraded` or `partial failure`, not `healthy`
+- [ ] Per-message delivery claims require the exact message trace, not nearby activity or inference
 - [ ] Docs mirror use, staleness, or unavailability is stated separately from runtime health
 
 ## Public-safe review checklist

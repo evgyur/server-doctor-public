@@ -615,6 +615,53 @@ Red flags:
 - fresh logs no longer show duplicate-polling or duplicate-runtime conflict symptoms
 - a real control probe behaves consistently after restart
 
+### 12a. Watchdog stale-log restart loop
+
+#### Symptoms
+
+- the gateway comes back healthy, but a custom watchdog restarts it again within the next minute or two
+- shallow health checks sometimes look green, yet Telegram or another user-facing path stays unstable
+- watchdog logs show repeated restart reasons tied to the same severe transport or lane-stall signal
+
+#### Why this happens
+
+Some watchdogs read a sliding log window such as `journalctl --since '-4 min'` and treat any severe line inside that window as fresh evidence.
+
+If the gateway already restarted, that window can still contain severe lines emitted by the previous PID. The watchdog then reuses stale evidence, kills the new healthy process, and creates the flapping loop itself.
+
+This is not just an aggressive restart policy problem. It is an evidence-isolation problem between old and current runtime epochs.
+
+#### Checks
+
+Confirm whether the same old severe event is being replayed against a newer gateway PID:
+
+```bash
+systemctl --user show openclaw-gateway -p MainPID -p ActiveEnterTimestamp --no-pager 2>/dev/null
+journalctl --user -u openclaw-gateway --since '-10 min' --no-pager 2>/dev/null | tail -n 200
+journalctl --user -u openclaw-gateway-watchdog --since '-10 min' --no-pager 2>/dev/null | tail -n 200
+```
+
+Look for this pattern:
+
+- watchdog restart reasons repeat with the same signal class
+- the severe log line timestamp is older than the current gateway start time
+- the watchdog keeps using a sliding recent window instead of a runtime epoch, journal cursor, or durable watermark
+
+#### Recovery
+
+- do not keep tuning transport first if the watchdog itself is causing the flapping
+- bind severe restart decisions to the current runtime epoch, journal cursor, or another durable watermark
+- suppress duplicate handling of the same already-consumed severe event
+- add a short cooldown for severe-signal restarts so one noisy burst cannot keep killing fresh PIDs
+- if the watchdog currently uses broad kill patterns, replace them with a restart of the canonical service target
+
+#### Validation
+
+- the watchdog can run against a healthy gateway without forcing another false restart
+- historical severe lines in the recent journal no longer trigger a restart for the current PID
+- watchdog logs show explicit healthy or suppressed-state output instead of repeated restart reasons
+- a real user-facing probe stays stable across at least one watchdog interval
+
 ### 13. Recovery validation: prove the fix on the real path
 
 #### Symptoms
