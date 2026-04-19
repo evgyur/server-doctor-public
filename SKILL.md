@@ -16,6 +16,19 @@ Use this skill to inspect and stabilize hosts that run:
 
 This public version is intentionally generic. It does not assume any specific hostnames, users, IPs, bot usernames, chat IDs, directories, or credentials.
 
+## Core rule
+
+Keep `SKILL.md` focused. Read the matching reference before acting.
+
+Before detailed routing, read:
+- `references/routing-stack.md`
+- `references/principal-architecture.md`
+- `references/core/INDEX.md`
+- `references/overlays/INDEX.md`
+- `incidents/INDEX.md`
+
+Use them to keep doctrine, runbooks, overlays, and incident memory separated.
+
 ## Non-negotiable warning
 
 This skill is severely limited without access to the relevant bots, servers, containers, or local project directories.
@@ -55,6 +68,27 @@ Do not jump from partial visibility or target uncertainty straight to outage lan
 6. Capture operational risks without leaking secrets.
 
 ## Workflow
+
+## Principal-grade architecture
+
+`server-doctor-public` should behave as a layered system, not a flat bundle of notes.
+
+Routing order:
+1. doctrine anchor
+2. platform runbook
+3. environment overlay
+4. dated incident note
+
+Placement rule:
+- reusable ops law -> doctrine
+- reusable platform workflow -> runbook
+- environment-specific fact -> overlay
+- one-off historical example -> incident note
+
+For design quality checks, use:
+- `references/principal-rubric.md`
+- `references/review-gate.md`
+- `scripts/review_placement.py`
 
 ### 1. Access & Inventory Preflight
 
@@ -346,12 +380,25 @@ Operating rules:
 
 Load these references when needed:
 
+Core doctrine:
 - `references/routine-admin.md`
 - `references/openclaw-host-audit.md`
 - `references/health-claims-and-evidence.md`
 - `references/outage-classification.md`
+
+Platform runbooks:
 - `references/openclaw-incident-response.md`
+- `references/openclaw-update-workflow.md`
+- `references/openclaw-taskflow-ops.md`
 - `references/security-forensics.md`
+- `references/onboarding.md`
+
+Environment overlays:
+- `references/hosts-inventory.md`
+- `references/bot-service-map.md`
+
+Incident memory:
+- `incidents/INDEX.md`
 
 ## Output expectations
 

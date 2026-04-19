@@ -95,6 +95,14 @@ Do not call recovery confirmed until a post-action live probe succeeds on the ca
 
 ## Concrete scenarios
 
+Use `incidents/INDEX.md` when you need sanitized precedent notes after the current route is already chosen.
+
+Recommended precedent set:
+- `incidents/2026-03-28-runtime-bundle-corruption-and-wrong-root-hotfix.md`
+- `incidents/2026-04-01-plugin-runtime-contract-drift.md`
+- `incidents/2026-04-13-watchdog-stale-signal-restart-loop.md`
+- `incidents/2026-04-17-post-update-dual-root-and-periodic-restart-loop.md`
+
 ### 5. Stale session model override
 
 #### Symptoms
@@ -236,6 +244,8 @@ Public helper:
 ./scripts/openclaw-telegram-transport-hotfix.sh --dry-run --host <ssh-host>
 ./scripts/openclaw-telegram-transport-hotfix.sh --apply --host <ssh-host>
 ./scripts/openclaw-telegram-transport-hotfix.sh --validate --host <ssh-host>
+# compatibility alias
+./scripts/openclaw-post-update-transport-hotfix.sh --dry-run --host <ssh-host>
 ```
 
 #### Validation
