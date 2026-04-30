@@ -1,6 +1,6 @@
 ---
 name: server-doctor
-description: Use when auditing or repairing Linux or macOS hosts that run OpenClaw, Telegram bots, or related automation, especially when the operator needs to map hosts, runtimes, and safe access paths before diagnosis.
+description: Use when auditing or repairing Linux or macOS hosts that run OpenClaw, Telegram bots, or related automation. Start with host/runtime/access mapping, then use focused references for incidents, updates, Task Flow, and safe public documentation.
 ---
 
 # Server Doctor
@@ -19,6 +19,12 @@ This public version is intentionally generic. It does not assume any specific ho
 ## Core rule
 
 Keep `SKILL.md` focused. Read the matching reference before acting.
+
+Direct-DM guardrail:
+
+- if a server operation is likely to take more than a brief bounded check, do not hold the user's DM lane open for the full operation
+- acknowledge quickly, then move the real work into a durable task, subagent, Task Flow branch, or other detached path
+- treat updates, repairs, multi-host probes, restart/soak work, and post-checks as async-by-default in DM-like channels
 
 Before detailed routing, read:
 - `references/routing-stack.md`
@@ -52,6 +58,12 @@ Operational diagnosis must separate:
   - down
 
 Do not jump from partial visibility or target uncertainty straight to outage language.
+
+## After-action rule
+
+After any `server-doctor` task, run a documentation feedback pass before completion.
+
+If the work produced reusable information, update the matching public-safe reference automatically before closing the task. Keep environment-specific facts, private hostnames, chat IDs, tokens, and local paths out of public docs; convert them into general patterns, placeholders, or sanitized incident lessons.
 
 ## Primary goals
 
@@ -323,6 +335,10 @@ Read `references/openclaw-incident-response.md` for concrete public-safe scenari
 - bootstrap-bloat and startup-tax
 - duplicate OpenClaw runtime on macOS
 - macOS LaunchAgent drift after OpenClaw update (wrapper replaced, secrets duplicated, proxy env leaked)
+- stale shell shims or split install roots after update
+- external watchdog or auth-sync automation causing restart churn
+- plugin/source drift between deployed runtime copies and maintained source trees
+- group/chat binding drift after config migration
 - post-update elevated approval drift caused by global vs per-agent `tools.elevated` policy
 
 When a known scenario has a narrow fix path, prefer language like:
@@ -340,6 +356,8 @@ Public helper scripts in this repo:
   - inspect, sync, and validate per-agent auth-profile drift for a chosen profile id
 - `scripts/openclaw-bootstrap-hygiene.sh`
   - inspect and normalize bootstrap drift in `AGENTS.md` and `TOOLS.md`
+- `scripts/ensure-telegram-group-agent-binding.py`
+  - parameterized public-safe guard for keeping one Telegram group bound to one dedicated agent/skill without hard-coded private IDs
 - `scripts/openclaw-telegram-transport-hotfix.sh`
   - re-apply a host-local Telegram transport compatibility patch after updates
 - `scripts/macos-single-openclaw-runtime.sh`

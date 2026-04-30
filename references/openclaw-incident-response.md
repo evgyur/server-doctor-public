@@ -789,6 +789,161 @@ Default action bias:
 - a different agent with stricter policy stays strict if that is intentional
 - approval prompts now match the configured policy instead of surprising the operator
 
+### 15. Restart-drain or tool-loop silence
+
+#### Symptoms
+
+- the runtime accepts a restart, but the user-facing lane stays quiet longer than expected
+- logs show in-flight work, tool-loop overflow, compaction churn, or queue ownership messages around the restart window
+- shallow gateway health returns before the originally affected chat has produced a complete reply
+
+#### Why this happens
+
+A restart can be deferred or complicated by active turns, oversized context, stuck tool loops, or queue-drain behavior. The process may be alive while the original lane is still not recovered.
+
+#### Checks
+
+```bash
+openclaw gateway status
+openclaw status --deep
+journalctl --user -u openclaw-gateway --since '-15 min' --no-pager 2>/dev/null | tail -n 240
+rg -n 'tool loop|in-flight|drain|compaction|context|queue owner|stale lock|restart' ~/.openclaw/agents ~/.openclaw/logs /tmp/openclaw 2>/dev/null
+```
+
+#### Recovery
+
+- distinguish deferred restart/drain from transport outage
+- avoid stacking repeated restarts while a previous graceful restart or drain is still resolving
+- if a single chat/session is wedged, prefer a narrow session/queue repair over wiping global state
+- if context bloat is the trigger, reduce the affected session path or start a fresh bounded lane rather than broad config changes
+
+#### Validation
+
+- the originally affected chat completes a fresh small prompt
+- logs no longer show repeated drain/tool-loop/context errors for that lane
+- the process has remained stable across a short control window
+
+### 16. Telegram media/caption or generated-artifact partial failure
+
+#### Symptoms
+
+- Telegram text works, but image+caption, generated media, or document attachment paths fail
+- inbound media appears on disk, yet the downstream model/plugin receives only text
+- generated artifacts are created locally but not delivered to the user
+- inline `MEDIA:/absolute/path/...` text appears instead of an attachment
+
+#### Why this happens
+
+Media handling often spans multiple layers: Telegram download, message metadata normalization, plugin turn protocol, local file materialization, final-payload delivery, and outbound channel delivery. A green text path does not prove the media path.
+
+#### Checks
+
+```bash
+find ~/.openclaw/media -maxdepth 3 -type f -mmin -30 2>/dev/null | tail -n 50
+rg -n 'MediaPaths|mediaPaths|localImage|type.*image|data:image|MEDIA:|shouldDropFinalPayloads|attachment' ~/.openclaw/logs /tmp/openclaw /path/to/plugin 2>/dev/null
+```
+
+Ask:
+
+- did Telegram download the file
+- did the plugin normalize both lowercase and runtime-specific metadata keys
+- did the client materialize local files into the protocol shape expected by the backend
+- did the final assistant output use a supported attachment route instead of host-local absolute `MEDIA:` text
+
+#### Recovery
+
+- fix the narrow layer that dropped the media; do not blame Telegram transport until download and metadata are checked
+- use tool-backed file/document delivery when normal reply media syntax cannot safely reference the file
+- if a plugin has both source and deployed copies, patch and test both or the bug will return on next deploy
+
+#### Validation
+
+- a fresh image+caption probe reaches the model/plugin as an image, not only text
+- generated file delivery arrives as an attachment, not literal `MEDIA:` text
+- tests or targeted smoke checks cover the exact media shape that failed
+
+### 17. Dedicated chat/group binding drift
+
+#### Symptoms
+
+- a Telegram group still gets replies, but from the wrong/default agent
+- a dedicated workflow skill stops being applied after config migration, update, or doctor repair
+- group prompt contains stale copied workflow rules that disagree with the current skill
+
+#### Why this happens
+
+The gateway can remain healthy while routing changes. Bindings, `channels.telegram.groups`, agent `skills`, and group `systemPrompt` are independent config surfaces; a repair can update one and leave another stale.
+
+#### Checks
+
+```bash
+rg -n 'bindings|channels.*telegram|groups|agentId|skills|systemPrompt' ~/.openclaw/openclaw.json
+```
+
+Confirm:
+
+- the intended agent exists
+- the intended skill is attached to that agent
+- the exact Telegram peer routes to that agent
+- the group config enables the skill as needed
+- the prompt is a short routing guard and points to the canonical skill source instead of duplicating workflow rules
+
+Public helper:
+
+```bash
+python3 ./scripts/ensure-telegram-group-agent-binding.py \
+  --config ~/.openclaw/openclaw.json \
+  --chat-id '<telegram-group-id>' \
+  --agent-id '<agent-id>' \
+  --skill-id '<skill-id>' \
+  --skill-source '<canonical-skill-path>' \
+  --dry-run
+```
+
+#### Recovery
+
+- repair the binding narrowly instead of widening global routing or access
+- keep procedural rules in the skill, not in the chat prompt
+- restart or reload through the canonical service manager if the runtime does not pick up config changes
+
+#### Validation
+
+- a fresh real message in the group lands in the dedicated agent session
+- the correct skill behavior appears without adding long duplicate prompt rules
+
+### 18. Source/deployed-copy drift after hotfixes
+
+#### Symptoms
+
+- a bug is fixed in a checkout but returns after restart, deploy, or update
+- live behavior differs from the maintained source tree
+- tests pass in one directory but the runtime loads another directory
+
+#### Why this happens
+
+Some plugin or extension installs have both a maintained repo and a deployed runtime copy. Hotfixing only one copy creates a temporary repair, not a durable fix.
+
+#### Checks
+
+```bash
+ps -ef | grep -Ei 'openclaw|plugin|extension' | grep -v grep
+rg -n '<changed-symbol-or-error>' /path/to/source /path/to/deployed-copy 2>/dev/null
+find ~/.openclaw/extensions -maxdepth 3 -type f -mmin -120 2>/dev/null
+```
+
+#### Recovery
+
+- identify the path actually loaded by the gateway
+- patch the loaded copy for immediate recovery if needed
+- also patch the maintained source or packaging path before closing the task
+- rerun targeted tests from the path whose code will be deployed next
+
+#### Validation
+
+- runtime behavior is fixed after restart
+- the maintained source contains the same general fix
+- a future update/deploy path will not silently drop the change
+
 ## What to avoid
 
 - do not rotate secrets during first response unless compromise is suspected
