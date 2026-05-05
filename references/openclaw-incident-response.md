@@ -134,7 +134,46 @@ rg -n 'unsupported|unknown model|fallback' ~/.openclaw/logs /tmp/openclaw 2>/dev
 - the affected session no longer reports the stale model
 - a fresh control prompt in the same chat uses the intended model without fallback
 
-### 6. Per-agent auth-profile drift
+### 6. Session runtime override drift
+
+#### Symptoms
+
+- status output claims a session is on a native runtime, but ordinary chat messages behave like a different runtime
+- slash commands still work, while normal dispatch fails with provider-auth errors
+- a route alias updates the model but the session still inherits an older agent runtime
+
+#### Why this happens
+
+Session state can carry both model selection and runtime selection. A helper that updates only `modelOverride` or a display-only runtime field can leave the real `agentRuntime` inherited from the agent or an older session. This creates a split where `/status` looks correct, but normal dispatch uses the wrong execution path.
+
+#### Checks
+
+Inspect the live session store, not only `/status`:
+
+```bash
+openclaw sessions --json --active 10 --all-agents --limit 20 \
+  | jq '.sessions[] | {key, modelProvider, model, providerOverride, modelOverride, agentHarnessId, agentRuntime, processing, waiting, queued}'
+
+rg -n '"agentRuntime"|"agentHarnessId"|"providerOverride"|"modelOverride"' ~/.openclaw/agents/*/sessions/sessions.json
+rg -n 'Missing API key|No API key|model-fallback|runtime' ~/.openclaw/logs /tmp/openclaw 2>/dev/null
+```
+
+#### Recovery
+
+- back up the affected session store before editing
+- set the intended provider/model overrides and the real runtime field together
+- for native Codex routes, make the session runtime explicit, for example `agentRuntime: {"id":"codex"}`
+- patch the route helper so future aliases preserve or set `agentRuntime` instead of deleting it
+- restart the gateway if the in-memory session does not reload cleanly
+
+#### Validation
+
+- the active session shows the intended `agentRuntime.id`
+- `/status` and `openclaw sessions --json` agree on model and runtime
+- a normal chat smoke test succeeds, not only a slash-command smoke test
+- process inspection shows only the expected native runtime sidecar, not a growing set of duplicate runtime processes
+
+### 7. Per-agent auth-profile drift
 
 #### Symptoms
 
@@ -181,7 +220,7 @@ Public helper:
 - cooldown state is cleared only where appropriate
 - a live Telegram probe no longer falls back to another provider
 
-### 7. Post-update Telegram transport regression
+### 8. Post-update Telegram transport regression
 
 #### Symptoms
 
