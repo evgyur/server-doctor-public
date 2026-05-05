@@ -374,6 +374,56 @@ Look for:
 - the plugin still loads normally from the bundled runtime
 - plugin-specific config remains in effect after restart
 
+### 7d. Hook recursion through gateway inference
+
+#### Symptoms
+
+- gateway process is alive and can still answer some probes, but user-facing replies become slow
+- current `top -H -p <gateway-pid>` shows a gateway thread consuming about one core
+- process checks do not show runaway model-runtime children or duplicate gateways
+- logs mention a local hook, `nativeHook.invoke`, `openclaw-infer`, liveness warnings, or queued work in a hook-owned lane
+
+#### Why this happens
+
+A local hook can accidentally call back into the same gateway it is running
+inside. A common shape is:
+
+1. message preprocessing hook runs inside the gateway
+2. hook launches a Python/Node helper synchronously
+3. helper runs `openclaw infer model run --gateway`
+4. that inference call waits on the same gateway event loop or queue that the hook is blocking
+
+This is a gateway re-entrancy problem, not a Telegram transport failure and not
+proof of a model-runtime process leak.
+
+#### Checks
+
+```bash
+top -H -p "$(systemctl --user show -p MainPID --value openclaw-gateway.service)"
+journalctl --user -u openclaw-gateway --since '10 minutes ago' --no-pager | \
+  grep -E 'nativeHook.invoke|openclaw-infer|liveness warning|hook'
+ps -eo pid,ppid,etime,%cpu,%mem,rss,cmd | \
+  grep -E 'openclaw-infer|python.*hook|node.*hook|openclaw.*gateway' | grep -v grep
+```
+
+Also inspect the hook source for environment flags or command calls that enable
+LLM parsing inside the synchronous hook path.
+
+#### Recovery
+
+- stop the recursive path first; do not broaden the restart loop
+- change the hook default to local deterministic parsing or metadata-only capture
+- gate LLM parsing behind an explicit opt-in environment variable
+- if LLM parsing is required, run it out of band through a queue, worker, cron, or separate runtime
+- restart the gateway after changing the hook source or deployed hook copy
+
+#### Validation
+
+- current `top -H -p <gateway-pid>` shows the gateway idle after the control window
+- no fresh `openclaw-infer` child remains from the hook path
+- a real Telegram or operator-facing control command receives a visible reply
+- model-runtime process checks still show only the intended singleton or expected worker set
+
 ### 8. Bootstrap-bloat and startup-tax
 
 #### Symptoms
