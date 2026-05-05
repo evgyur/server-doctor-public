@@ -220,7 +220,73 @@ Public helper:
 - cooldown state is cleared only where appropriate
 - a live Telegram probe no longer falls back to another provider
 
-### 8. Post-update Telegram transport regression
+### 8. Native Codex profile drift inside existing sessions
+
+#### Symptoms
+
+- profile switch reports success, but native `openai/*` sessions still fail under a previous auth profile
+- `sessions.json` shows the intended `authProfileOverride`, while the runtime still reports a missing or stale Codex app-server auth profile
+- only already-created native Codex threads fail; fresh sessions or Pi-runtime sessions may still work
+
+#### Why this happens
+
+Native Codex sessions can carry app-server thread metadata outside the top-level session override. Updating only `authProfileOverride` in `sessions.json` may not rebind an already-created native Codex thread.
+
+#### Checks
+
+```bash
+rg -n '"authProfileOverride"|"modelProvider": "openai"|"providerOverride": "openai"' ~/.openclaw/agents/*/sessions/sessions.json
+rg -n '"authProfileId"|auth profile .* was not found|codex app-server' ~/.openclaw/agents/*/sessions/*.jsonl ~/.openclaw/agents/*/sessions/*.json 2>/dev/null
+```
+
+#### Recovery
+
+- back up the affected session store
+- for native `openai/*` sessions bound to the wrong app-server auth profile, archive the session entry and its session files so the next turn creates a fresh thread
+- then run the profile switch/sync helper again so per-agent auth stores agree
+- restart only the gateway if live memory still holds the stale session
+
+#### Validation
+
+- the next turn creates a new session id
+- the new session uses `modelProvider=openai` and the intended auth profile
+- live Telegram smoke succeeds in the affected chat or topic
+
+### 9. Long-lived Codex app-server client is closed
+
+#### Symptoms
+
+- native `openai/*` routes fail before reply with `codex app-server client is closed`
+- logs show repeated `codex app-server connection closed during startup` or `TokenRefreshFailed`
+- Pi-runtime `openai-codex/*` sessions still answer, but native Codex sessions stall or return generic error text
+
+#### Checks
+
+```bash
+ps -eo pid,ppid,stat,pcpu,pmem,etime,args | grep -E 'codex app-server|openclaw.*gateway' | grep -v grep
+journalctl --user --since '10 minutes ago' --no-pager | grep -Ei 'codex app-server|client is closed|TokenRefreshFailed|Failed to parse server response'
+```
+
+Also check for local port conflicts if app-server startup repeatedly spawns a helper:
+
+```bash
+ss -ltnp
+lsof -nP -iTCP:<port> -sTCP:LISTEN
+```
+
+#### Recovery
+
+- terminate only the stale Codex app-server process for the affected OpenClaw owner, not unrelated supervisors
+- restart the gateway so it reconnects to a fresh app-server
+- if native Codex still fails and the bot must be restored immediately, move only the affected agent/session back to the Pi route while leaving other native-Codex agents intact
+
+#### Validation
+
+- a native route smoke either succeeds or fails with a new, current error
+- fallback sessions answer normally if fallback was applied
+- supervisors remain active if they are required for ongoing work
+
+### 10. Post-update Telegram transport regression
 
 #### Symptoms
 
