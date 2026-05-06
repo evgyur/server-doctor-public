@@ -38,6 +38,17 @@ One chunk should have:
 - one validation target
 - one checkpoint note
 
+## Supervisor / worker split for bounded TaskFlow launchers
+For TaskFlow systems that launch expensive agent or model workers, keep the supervisor as a control plane:
+- reconcile state and perform admission only
+- write a durable dispatch envelope before launching execution
+- count capacity before launch from durable claims plus the live process or service table
+- start execution through a bounded launcher, then return to the supervisor loop without waiting for the worker
+
+The worker should run under a separate transient service or equivalent sandbox with explicit memory, task, CPU, and wall-clock limits. Do not let the supervisor block on a long model command.
+
+Use a stable idempotency key for each dispatch, such as `(state_path, slice_id, generation_or_run_id)`. Store the launch claim before starting the transient worker. If the launcher fails before the worker starts, remove the claim so the dispatch can be retried; if the claim already exists, suppress the duplicate launch.
+
 ## Example chunk sequence
 1. confirm canonical runtime and logs
 2. clear one narrow source of drift
