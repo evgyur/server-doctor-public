@@ -286,6 +286,46 @@ lsof -nP -iTCP:<port> -sTCP:LISTEN
 - fallback sessions answer normally if fallback was applied
 - supervisors remain active if they are required for ongoing work
 
+### 9a. Native Codex DM produces a reply internally but Telegram stays silent
+
+#### Symptoms
+
+- native `openai/*` plus `agentRuntime.id=codex` is selected
+- trajectory or session logs show a completed assistant reply
+- Telegram receives no visible message, or receives duplicate replies after a delivery-mode change
+- `/status` or `/gptprof status` is also silent or returns `Command not found`
+
+#### Checks
+
+```bash
+openclaw sessions --json --active 10 --all-agents --limit 20 \
+  | jq '.sessions[] | {key, providerOverride, modelOverride, agentRuntime, agentHarnessId, processing, queued}'
+
+rg -n 'assistantTexts|model.completed|sendMessage ok|Command not found|custom command|native commands' \
+  ~/.openclaw/agents/*/sessions ~/.openclaw/logs /tmp/openclaw 2>/dev/null
+```
+
+Also inspect `~/.openclaw/openclaw.json` for:
+
+- `messages.visibleReplies`
+- `channels.telegram.commands.native`
+- plugin/custom command entries that shadow native commands such as `status`, `reset`, or profile-switch commands
+
+#### Recovery
+
+- if normal final replies should be delivered by Telegram automatically, set `messages.visibleReplies` to `automatic`
+- if duplicate replies appear after that change, archive only the affected session so old system-prompt instructions to call a message tool do not combine with automatic delivery
+- enable Telegram native commands when `/status` is silent after an update
+- remove or rename custom command declarations that shadow native slash commands, and make profile-switch commands accept arguments when they need subcommands such as `status`
+- for native Codex cron jobs, migrate enabled payloads away from stale aliases or providers that are not registered in the native route
+
+#### Validation
+
+- a fresh normal DM smoke produces exactly one visible Telegram reply
+- `/status` reports the intended provider, model, runtime, profile, and queue depth
+- `/gptprof status` works when the profile-switch helper is expected to own that command
+- fresh logs show no provider-not-found errors from enabled cron payloads
+
 ### 10. Post-update Telegram transport regression
 
 #### Symptoms
