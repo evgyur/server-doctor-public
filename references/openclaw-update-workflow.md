@@ -58,6 +58,13 @@ Verify all of these before declaring success:
 6. no external restart automation is causing fresh restart churn
 7. a real end-to-end probe succeeds
 
+If the update is run with `--no-restart` on a global npm install, the old live
+gateway can briefly import from the newly swapped package tree. Doctor or health
+checks may then show transient `ERR_MODULE_NOT_FOUND` / missing-bundle warnings
+until the controlled gateway restart completes. Treat that as a pre-restart
+state only; it is not acceptable final evidence. Restart the canonical gateway
+and require clean post-restart health plus an end-to-end probe.
+
 ## Common post-update regressions to check
 - Telegram transport regression
 - wrapper or startup-path drift on macOS LaunchAgent installs
