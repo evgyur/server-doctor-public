@@ -56,6 +56,37 @@ Use one of these labels when possible:
 - `direct process`
 - `tmux / screen managed`
 
+## OpenClaw tenant and agent identity guard
+
+When a host has both a main bot tenant and a separate development bot tenant, do not reuse the development tenant name as an agent id inside the main tenant.
+
+Confirmed public-safe pattern:
+
+- main tenant on the shared host:
+  - runtime owner: `chip`
+  - main coding agent id: `chipcoder`
+  - `chipdev` should not appear as an active agent id or Telegram session key in this tenant
+- development tenant on the same host:
+  - runtime owner: `chipdev`
+  - separate OpenClaw state directory and gateway
+  - this is the `chipdev` bot/tenant, not the `chipcoder` agent inside the main tenant
+
+Validation pattern:
+
+```bash
+rg -n 'agent:chipdev|"id": "chipdev"|chipdev' \
+  /home/chip/.openclaw/openclaw.json /home/chip/.openclaw/agents
+
+sudo -n -u chipdev python3 - <<'PY'
+import json, pathlib
+cfg = json.loads(pathlib.Path('/home/chipdev/.openclaw/openclaw.json').read_text())
+print(cfg.get('agents', {}).get('defaults', {}).get('model'))
+print(cfg.get('agents', {}).get('defaults', {}).get('agentRuntime'))
+PY
+```
+
+If the first command finds active `agent:chipdev` session keys under the main tenant, archive those stale entries before testing the `chipcoder` route.
+
 ## Example, sanitized
 
 ```markdown
