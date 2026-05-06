@@ -326,6 +326,53 @@ Also inspect `~/.openclaw/openclaw.json` for:
 - `/gptprof status` works when the profile-switch helper is expected to own that command
 - fresh logs show no provider-not-found errors from enabled cron payloads
 
+### 9b. Pi-route rollback must clean sessions and cron payload models
+
+#### Symptoms
+
+- native `openai/*` plus Codex runtime is rolled back to `openai-codex/*` plus Pi runtime, but some Telegram lanes still fail
+- DM replies mention a missing OpenAI API key even though `codex-profile-manager.py apply-pi-route` succeeded
+- logs continue to show `No API key found for provider "openai"` from `opscron`, `chipdigest`, or other cron lanes
+- a topic replies to stale context instead of the fresh smoke marker after the route rollback
+
+#### Root cause
+
+`apply-pi-route` can update the main agent/default route without rewriting all persisted state. Existing `sessions.json` entries may still carry `providerOverride=openai`, `modelProvider=openai`, or `agentRuntime.id=codex`. Enabled cron jobs in `~/.openclaw/cron/jobs.json` can also keep `payload.model="openai/gpt-5.5"` and recreate broken run sessions after the next schedule tick.
+
+#### Checks
+
+```bash
+rg -n '"providerOverride": "openai"|"modelProvider": "openai"|"agentHarnessId": "codex"|"agentRuntime"' \
+  ~/.openclaw/agents/*/sessions/sessions.json
+
+python3 - <<'PY'
+import json, pathlib
+p = pathlib.Path.home() / ".openclaw/cron/jobs.json"
+obj = json.loads(p.read_text())
+jobs = obj.get("jobs") if isinstance(obj, dict) else obj
+items = jobs.items() if isinstance(jobs, dict) else [(j.get("id"), j) for j in jobs]
+for jid, job in items:
+    payload = job.get("payload") if isinstance(job, dict) else None
+    if isinstance(payload, dict) and payload.get("model") == "openai/gpt-5.5":
+        print(jid, job.get("agentId"), job.get("name"))
+PY
+```
+
+#### Recovery
+
+- back up every touched `sessions.json` and `cron/jobs.json` before editing
+- archive only sessions that explicitly force direct OpenAI or Codex runtime while the host is on Pi route
+- rewrite enabled cron `payload.model` values from direct `openai/gpt-5.5` to the intended `openai-codex/gpt-5.5`
+- after an OpenClaw package update or service restart on a new build, re-check the route and repeat the stale-session scan; startup/recovery can flush old in-memory native session fields back to disk before the rollback is fully clean
+- restart only the affected `openclaw-gateway.service`; do not stop required supervisors unless direct evidence points to them
+
+#### Validation
+
+- `CRON_OPENAI_GPT55_COUNT` is `0`
+- stale session scan returns `0`
+- fresh DM and affected group/topic Telegram smokes get visible replies from `Claw`
+- fresh gateway logs show no new `No API key found for provider "openai"`, `ECONNREFUSED`, `client is closed`, or `retries exhausted` for the tested lanes
+
 ### 10. Post-update Telegram transport regression
 
 #### Symptoms
