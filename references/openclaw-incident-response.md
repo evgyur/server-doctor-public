@@ -218,6 +218,43 @@ Public helper:
 
 - the inspected agents now share one consistent profile payload for the affected provider
 - cooldown state is cleared only where appropriate
+
+### 8. Native Codex websocket lane overload
+
+#### Symptoms
+
+- the gateway is alive and Telegram transport can send messages, but selected chats stop replying
+- logs show `codex app-server client is closed`, `connection closed during startup`, or repeated stalled `embedded_run` sessions
+- direct messages may recover while group/topic lanes stay stuck
+- session stores already show `modelProvider: openai`, `model: gpt-*`, and `agentRuntime.id: codex`
+
+#### Why this happens
+
+Native Codex websocket mode can fail when several OpenClaw lanes start embedded runs against the same `codex app-server` at once. The failure can leave per-chat session entries in `processing` even after the app-server is restarted.
+
+#### Checks
+
+```bash
+openclaw sessions --agent <agent-id> --json --limit 20
+journalctl --user -u openclaw-gateway.service --since '30 minutes ago' --no-pager | \
+  grep -Ei 'codex app-server|client is closed|retries exhausted|stalled session|lane task error|sendMessage'
+systemctl --user status codex-app-server.service openclaw-gateway.service --no-pager
+ss -ltnp | grep -E ':(<gateway-port>|<codex-app-server-port>)'
+```
+
+#### Recovery
+
+- keep the native route explicit: defaults and affected agents should use `openai/<model>` and `agentRuntime: {"id":"codex"}`
+- bound native Codex admission on affected tenants; for fragile websocket installs set `agents.defaults.maxConcurrent` and `agents.defaults.subagents.maxConcurrent` to `1`
+- ensure the singleton `codex-app-server.service` is active before restarting the gateway
+- archive only the stalled session-store entries for affected chat keys, preserving a backup under incident evidence
+- restart the gateway after session-store surgery so in-memory lanes are rebuilt from clean state
+
+#### Validation
+
+- a real Telegram smoke succeeds in every affected surface: DM, group, and forum topic
+- logs after the final restart do not contain fresh `client is closed`, `retries exhausted`, or stalled-session diagnostics for the tested keys
+- `openclaw sessions --json` for the tested keys reports `openai` model provider and native Codex runtime inheritance
 - a live Telegram probe no longer falls back to another provider
 
 ### 8. Native Codex profile drift inside existing sessions
