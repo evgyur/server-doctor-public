@@ -257,6 +257,57 @@ ss -ltnp | grep -E ':(<gateway-port>|<codex-app-server-port>)'
 - `openclaw sessions --json` for the tested keys reports `openai` model provider and native Codex runtime inheritance
 - a live Telegram probe no longer falls back to another provider
 
+#### Durable control-plane fix
+
+If the same tenant repeatedly hangs after manual repair, treat it as an architecture problem:
+
+- run a read-only stability audit before changing state:
+
+```bash
+python3 scripts/openclaw-native-codex-stability-audit.py \
+  --state-dir ~/.openclaw \
+  --owner "$USER" \
+  --codex-port '<codex-app-server-port>' \
+  --json
+```
+
+- migrate or disable enabled cron jobs that still carry `openai-codex` payload state before blaming Telegram transport
+- keep long-running cron and proactive work out of the interactive Telegram blast radius; if they must use Codex, dispatch them through a bounded launcher or separate tenant
+- add hard systemd limits to the Codex app-server unit: `MemoryMax`, `TasksMax`, and `RuntimeMaxSec`
+
+For a `systemd --user` Codex app-server singleton, prefer an explicit drop-in:
+
+```ini
+# ~/.config/systemd/user/codex-app-server.service.d/70-resource-limits.conf
+[Service]
+MemoryMax=8G
+TasksMax=96
+RuntimeMaxSec=6h
+```
+
+Then reload and restart the smallest affected units:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user restart codex-app-server.service
+systemctl --user restart openclaw-gateway.service
+systemctl --user show codex-app-server.service -p MemoryMax -p TasksMax -p RuntimeMaxUSec
+```
+
+- use stale-session remediation as a reconciler loop, not as ad-hoc surgery:
+  - detect `stalled session` diagnostics
+  - archive only affected session keys
+  - restart only the smallest component that holds that lane in memory
+  - send a real Telegram smoke after the action
+- do not stop unrelated supervisors; they are separate control planes and may be required for ongoing work
+
+Minimum exit criteria:
+
+- no enabled cron job contains stale `openai-codex` route state
+- recent sessions do not report `modelProvider: openai-codex`
+- app-server worker count and memory stay below the tenant threshold during a soak window
+- DM, group, and topic smoke pass after the final gateway/app-server restart
+
 ### 8. Native Codex profile drift inside existing sessions
 
 #### Symptoms
