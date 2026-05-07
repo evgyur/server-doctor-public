@@ -268,10 +268,13 @@ python3 scripts/openclaw-native-codex-stability-audit.py \
   --state-dir ~/.openclaw \
   --owner "$USER" \
   --codex-port '<codex-app-server-port>' \
+  --expected-cron-model mmfast \
+  --expected-cron-thinking high \
   --json
 ```
 
 - migrate or disable enabled cron jobs that still carry `openai-codex` payload state before blaming Telegram transport
+- when cron jobs are intentionally offloaded from native Codex, enforce both payload fields together, for example `model: mmfast` and `thinking: high`
 - keep long-running cron and proactive work out of the interactive Telegram blast radius; if they must use Codex, dispatch them through a bounded launcher or separate tenant
 - add hard systemd limits to the Codex app-server unit: `MemoryMax`, `TasksMax`, and `RuntimeMaxSec`
 

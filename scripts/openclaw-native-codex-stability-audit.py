@@ -166,6 +166,41 @@ def audit(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
 
+    cron_model_drift = []
+    if args.expected_cron_model or args.expected_cron_thinking:
+        for job in cron_jobs:
+            payload = job.get("payload") if isinstance(job.get("payload"), dict) else {}
+            actual_model = payload.get("model")
+            actual_thinking = payload.get("thinking")
+            model_bad = args.expected_cron_model and actual_model != args.expected_cron_model
+            thinking_bad = (
+                args.expected_cron_thinking
+                and actual_thinking != args.expected_cron_thinking
+            )
+            if model_bad or thinking_bad:
+                cron_model_drift.append(
+                    {
+                        "id": job.get("id"),
+                        "name": job.get("name"),
+                        "agentId": job.get("agentId"),
+                        "enabled": job.get("enabled"),
+                        "model": actual_model,
+                        "thinking": actual_thinking,
+                    }
+                )
+    if cron_model_drift:
+        findings.append(
+            {
+                "severity": "critical",
+                "code": "cron-model-thinking-drift",
+                "message": "Cron payload model or thinking level does not match the expected policy.",
+                "count": len(cron_model_drift),
+                "expectedModel": args.expected_cron_model,
+                "expectedThinking": args.expected_cron_thinking,
+                "examples": cron_model_drift[: args.example_limit],
+            }
+        )
+
     recent_sessions = []
     stale_route_sessions = []
     large_sessions = []
@@ -275,6 +310,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expected-model", default="openai/gpt-5.5")
     parser.add_argument("--expected-concurrency", type=int, default=1)
     parser.add_argument("--codex-port", default="39175")
+    parser.add_argument("--expected-cron-model")
+    parser.add_argument("--expected-cron-thinking")
     parser.add_argument("--active-hours", type=float, default=4)
     parser.add_argument("--large-session-tokens", type=int, default=120_000)
     parser.add_argument("--max-appserver-rss-gb", type=float, default=8.0)
