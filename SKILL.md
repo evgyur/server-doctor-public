@@ -29,11 +29,15 @@ Direct-DM guardrail:
 Before detailed routing, read:
 - `references/routing-stack.md`
 - `references/principal-architecture.md`
-- `references/core/INDEX.md`
-- `references/overlays/INDEX.md`
+- `references/server-doctor-fast-paths.md` for common routes
+- `references/server-doctor-command-layer.md` for implemented public commands
+- `references/core/INDEX.md` when present
+- `references/overlays/INDEX.md` when present
 - `incidents/INDEX.md`
 
-Use them to keep doctrine, runbooks, overlays, and incident memory separated.
+Use them to keep doctrine, runbooks, overlays, incident memory, and command entrypoints separated.
+
+When delegating server work to Claude Code, Codex, subagents, or another ops/coding agent, first read `references/agent-tasking-for-server-ops.md`. It defines the public-safe task contract: raw evidence, target/access path, root-cause-first investigation, minimal mutation, debug reset, and proof before “fixed”.
 
 ## Non-negotiable warning
 
@@ -418,19 +422,43 @@ Environment overlays:
 Incident memory:
 - `incidents/INDEX.md`
 
-## Output expectations
+## Output Contract
 
 A good output from this skill should give the operator:
 
-- a host-by-host or machine-by-machine map
-- a bot-to-host map
-- a user-by-user runtime inventory
-- a runtime map showing how each bot is started
-- an access map showing how each reachable target can be inspected safely
-- the role of each bot
-- restart/log commands
-- current risks
-- known unknowns that still need deeper access
-- a clear statement when the work is being done in `partial map` mode
+- target and access path used;
+- map state: `mapped`, `partial map`, or `unreachable`;
+- host-by-host or machine-by-machine map;
+- bot/service-to-host map when relevant;
+- runtime owner and startup mechanism for each service inspected;
+- evidence gathered, including commands/probes and result state;
+- spec correctness separated from operational health;
+- changes made, files/services touched, and verification performed;
+- restart/log commands or rollback path when relevant;
+- current risks and known unknowns;
+- a clear statement when the work is being done in `partial map` mode.
 
 The result should be readable, operationally useful, and safe to share publicly.
+
+## Quick Test Checklist
+
+Before calling server-doctor work done:
+
+- [ ] Matching route/reference was selected before deep action.
+- [ ] Target host/runtime/source of truth was verified with direct evidence.
+- [ ] Raw logs/errors were used when available, not only paraphrases.
+- [ ] Spec correctness and operational health are separated in the report.
+- [ ] Any mutation was followed by the same probe or an equivalent end-to-end check.
+- [ ] No secrets, private IDs, raw private payloads, or local-only paths were introduced into public docs.
+- [ ] Reusable lessons were written into a public-safe reference.
+
+## Done Criteria
+
+A server-doctor task is complete when:
+
+- [ ] the correct host/runtime/source-of-truth is identified or the missing access is named;
+- [ ] findings are backed by direct evidence or clearly labeled assumptions;
+- [ ] destructive, public, or production actions were avoided or explicitly scoped;
+- [ ] health/recovery claims match the strength of the evidence;
+- [ ] validation passed, or any remaining failure is named with a safe next step;
+- [ ] public documentation updates contain reusable patterns, not private operational details.
