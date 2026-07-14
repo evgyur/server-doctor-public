@@ -2,8 +2,11 @@
   "name": "server-doctor-public",
   "version": "2.0.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
-    "test": "bash -lc \"python3 -m unittest tests.test_normalize_openclaw_models tests.test_ensure_telegram_group_agent_binding tests.test_public_safety && bash tests/test-openclaw-auth-profile-sync.sh && bash tests/test-openclaw-telegram-transport-hotfix.sh && bash tests/test-openclaw-post-update-transport-hotfix.sh && bash tests/test-openclaw-bootstrap-hygiene.sh && bash tests/test-doctor-mvp.sh && node --test tests/macos-single-openclaw-runtime.test.js tests/openclaw-single-gateway.test.js\""
+    "test": "bash -lc \"python3 -m unittest tests.test_normalize_openclaw_models tests.test_ensure_telegram_group_agent_binding tests.test_public_safety tests.test_privacy_gate tests.test_hermes_fork_update && bash tests/test-openclaw-auth-profile-sync.sh && bash tests/test-openclaw-telegram-transport-hotfix.sh && bash tests/test-openclaw-post-update-transport-hotfix.sh && bash tests/test-doctor-mvp.sh && node --test tests/macos-single-openclaw-runtime.test.js tests/openclaw-single-gateway.test.js && python3 tests/test_public_hygiene.py\"",
+    "test:privacy": "python3 scripts/privacy_gate.py --root .",
+    "test:public-safety": "python3 scripts/check-public-safety.py --staged"
   }
 }

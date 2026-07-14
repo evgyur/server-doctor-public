@@ -15,44 +15,11 @@ from pathlib import Path
 from typing import TypeAlias
 
 ROOT = Path(__file__).resolve().parents[1]
-VENDORED_PREFIXES = ("references/openclaw-docs/",)
 ScanRow: TypeAlias = tuple[str, int, str | None]
-
-PRIVATE_PREFIX = "ch" + "ip"
-PRIVATE_WORDS = [
-    "human" + "20",
-    "intel" + "64",
-    "ryzen" + "64",
-    "pro" + "hoster",
-    "hel" + "1",
-    "mac-mini-" + "claw",
-    "clawd-" + "workspace",
-    "scrum-" + "dashboard",
-]
-PRIVATE_MARKER_RE = re.compile(
-    r"(?<![A-Za-z0-9])(?:"
-    + re.escape(PRIVATE_PREFIX)
-    + r"[A-Za-z0-9_-]*|"
-    + "|".join(re.escape(value) for value in PRIVATE_WORDS)
-    + r")(?![A-Za-z0-9])",
-    re.I,
-)
-
-PUBLIC_OWNER = "ev" + "gyur"
-PUBLIC_OWNER_RE = re.compile(
-    r"(?<![A-Za-z0-9])" + re.escape(PUBLIC_OWNER) + r"(?![A-Za-z0-9])",
-    re.I,
-)
-ALLOWED_OWNER_URL_RE = re.compile(
-    r"https://github\.com/"
-    + re.escape(PUBLIC_OWNER)
-    + r"/server-doctor-public(?:\.git)?(?=$|[\s)`'\"])",
-    re.I,
-)
 
 HOME_OR_ROOT_RE = re.compile(
     r"(?:"
-    r"/(?:home|Users)/(?!<[^/]+>(?=/|$)|\$\{?\w+\}?(?=/|$|[\s`'\":),;}]))"
+    r"/(?:home|Users)/(?!<[^/]+>(?=/|$|[\s`'\":),;}])|\$\{?\w+\}?(?=/|$|[\s`'\":),;}]))"
     r"[^/\s`'\"]+(?=/|$|[\s`'\":),;])"
     r"|/root(?=/|$|[\s`'\":),;])"
     r")"
@@ -83,8 +50,6 @@ RULES = [
             re.I,
         ),
     ),
-    ("private-marker", PRIVATE_MARKER_RE),
-    ("public-owner-outside-repo-url", PUBLIC_OWNER_RE),
 ]
 
 ALLOWED_IPV4_NETWORKS = tuple(
@@ -200,8 +165,6 @@ def authored_lines() -> list[ScanRow]:
     tracked = run_git("ls-files", "-z")
     rows: list[ScanRow] = []
     for item in filter(None, tracked.split("\0")):
-        if item.startswith(VENDORED_PREFIXES):
-            continue
         rows.extend(file_lines(ROOT / item))
     return rows
 
@@ -214,12 +177,22 @@ def ipv4_allowed(value: str) -> bool:
     return any(address in network for network in ALLOWED_IPV4_NETWORKS)
 
 
-def owner_scan_text(text: str) -> str:
-    return ALLOWED_OWNER_URL_RE.sub("", text)
+def matched_rule_names(text: str) -> list[str]:
+    names: list[str] = []
+    for name, pattern in RULES:
+        matches = list(pattern.finditer(text))
+        if not matches:
+            continue
+        if name == "ipv4-address" and all(
+            ipv4_allowed(match.group(0)) for match in matches
+        ):
+            continue
+        names.append(name)
+    return names
 
 
 def path_is_sensitive(path: str) -> bool:
-    return bool(PRIVATE_MARKER_RE.search(path) or PUBLIC_OWNER_RE.search(path))
+    return bool(matched_rule_names(path))
 
 
 def violations(rows: list[ScanRow]) -> list[tuple[str, int, str]]:
@@ -228,19 +201,12 @@ def violations(rows: list[ScanRow]) -> list[tuple[str, int, str]]:
     for path, line_no, text in rows:
         if path not in checked_paths:
             checked_paths.add(path)
-            if path_is_sensitive(path):
-                found.add((path, 0, "tracked-path-private-marker"))
+            for name in matched_rule_names(path):
+                found.add((path, 0, f"tracked-path-{name}"))
         if text is None:
             found.add((path, line_no, "unreadable-or-non-utf8-file"))
             continue
-        for name, pattern in RULES:
-            candidate = owner_scan_text(text) if name == "public-owner-outside-repo-url" else text
-            matches = list(pattern.finditer(candidate))
-            if not matches:
-                continue
-            if name == "ipv4-address":
-                if all(ipv4_allowed(match.group(0)) for match in matches):
-                    continue
+        for name in matched_rule_names(text):
             found.add((path, line_no, name))
     return sorted(found)
 

@@ -14,7 +14,7 @@ Check whether the claim is aimed at the right thing and supported by the right e
 - did we use the right source of truth for the current runtime generation
 - is the evidence direct and recent
 - does the wording match only what the evidence proves
-- did we use the local docs mirror or live public docs when topology or runtime path was unclear
+- did we consult current official docs when topology or runtime path was unclear
 
 If spec correctness is unresolved, do not make a strong health claim. Use `unknown`, `visibility-limited`, or `misconfigured check / wrong target`.
 
@@ -57,7 +57,7 @@ Before using strong outage or recovery wording, confirm the canonical runtime id
 - exact systemd unit, launchd label, container, or process tree
 - runtime directory or state directory
 - live port, socket, or health endpoint
-- whether the local docs mirror under `references/openclaw-docs/current/` was used, stale, or unavailable
+- which official documentation source and version/date informed the topology check
 
 If any of these are uncertain, downgrade the claim language.
 
@@ -153,9 +153,9 @@ Recovery wording requires:
 | `telegram transport is unhealthy` | canonical transport target confirmed; real send or read path fails, stalls, or returns errors on the live API | matching logs from the transport runtime; process state; reachable port with bad behavior | only upstream model symptoms; wrong Telegram peer or payload shape; wrong runtime path | `The canonical Telegram transport path is unhealthy: the live message flow is failing.` | `Telegram is down.` when the issue may be a bad probe or wrong runtime target |
 | `incident likely caused by legacy or stale health pipeline` | live runtime or state inspection contradicts the old check; legacy checker or doctor warning is known stale or mismatched to current runtime | matching docs or release notes; repeated false-positive pattern | only suspicion; no direct contradiction from the live runtime | `Current evidence points to a stale health pipeline rather than a live outage.` | `The monitor is broken.` without showing the live contradiction |
 | `wrong runtime path or service target was being checked` | canonical runtime identity confirmed; failed probe shown to hit a mirror path, backup service, old port, old unit, duplicate runtime, or wrong host | docs or runtime map confirm topology; matching process or port map | only a hunch that the target looks wrong | `The failing check targeted a non-canonical runtime path, so the outage claim does not hold yet.` | `The service recovered.` when the real issue was only a bad target |
-| `docs mirror was used` | investigation explicitly used `references/openclaw-docs/FILELIST.md`, `references/openclaw-docs/current/`, or live public docs fallback was stated | mirror snapshot or lookup path noted | assuming docs were consulted | `Diagnosis used the local docs mirror for topology guidance.` | `Docs confirm the outage.` because docs do not prove runtime state |
-| `docs mirror was stale` | mirror snapshot is older than the needed runtime or contradicts newer direct evidence; this limitation is stated | refresh attempt documented | mirror age guessed but not checked | `The local docs mirror appears stale for this runtime version, so topology guidance may lag.` | `The docs are wrong.` without establishing recency limits |
-| `local docs unavailable` | `references/openclaw-docs/current/` is missing or unusable and the fallback to live public docs is stated | refresh attempt documented | not checking the mirror at all | `Local docs mirror was unavailable, so topology confidence is reduced.` | `No docs exist.` when only the local mirror was unavailable |
+| `official docs were used` | investigation records the current official documentation source and the specific topology/runtime guidance applied | source version or retrieval date noted | assuming docs were consulted | `Diagnosis used the current official docs for topology guidance.` | `Docs confirm the outage.` because docs do not prove runtime state |
+| `documentation may be stale` | the available documentation predates the runtime or contradicts newer direct evidence; this limitation is stated | retrieval date and release notes documented | age guessed but not checked | `Available documentation may lag this runtime version, so topology guidance is provisional.` | `The docs are wrong.` without establishing recency limits |
+| `official docs unavailable` | the official source was unreachable and that limitation is stated | retry or alternate official source documented | not attempting documentation lookup | `Official docs were unavailable, so topology confidence is reduced.` | `No docs exist.` when only one lookup failed |
 | `recovery is confirmed` | action taken; direct post-fix proof passed; relevant user-facing probe or canonical health endpoint now succeeds; stale contradiction cleared if relevant | second confirmation after a short wait; latency measurement noted | restart only; service manager says active; operator expectation | `Recovery is confirmed by a post-fix live probe on the canonical path.` | `Recovered.` immediately after restart with no live proof |
 | `degraded but not outage` | canonical target confirmed; direct probe still works but latency, errors, backlog, or one function path is impaired | logs or metrics show queueing, retries, or partial delivery failures | green shallow health endpoint alone; anecdotal slowness with no direct probe | `Service is degraded but not fully down; the endpoint responds, but latency remains elevated.` | `Service is healthy.` when user-facing behavior is still materially impaired |
 

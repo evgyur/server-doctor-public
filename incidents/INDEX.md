@@ -4,7 +4,12 @@ Canonical incident-memory layer for `server-doctor-public`.
 
 Use incident notes as evidence and precedent only after the current route is already chosen.
 
-## Current sanitized incident notes
+## Reusable incident patterns
+
+- `patterns/auth-store-permission-mismatch.md`
+- `patterns/partial-module-extraction-after-merge.md`
+
+## Historical sanitized incident notes
 - `2026-03-28-runtime-bundle-corruption-and-wrong-root-hotfix.md`
 - `2026-04-01-plugin-runtime-contract-drift.md`
 - `2026-04-13-watchdog-stale-signal-restart-loop.md`

@@ -17,7 +17,8 @@ Options:
   --gateway-port <port>  Default: 8090
 
 The helper keeps one user-level OpenClaw gateway and removes a conflicting
-system-level unit after writing timestamped backups. Remote apply requires sudo.
+system-level unit after writing timestamped backups. Remote apply requires sudo;
+remote validation also requires systemd, Python 3, and `ss` from iproute2.
 EOF
 }
 
@@ -301,7 +302,7 @@ remote_local_args() {
 run_remote_mode() {
   local mode="$1"
   local host="$2"
-  local args uid_cmd user_systemctl ownership_cmd live_exec_check expected_live_argv expected_fragment exec_check_python
+  local args uid_cmd user_systemctl ownership_cmd live_exec_check expected_live_argv expected_fragment exec_check_python listener_check_python system_stop_cmd system_absent_check
   args="$(remote_local_args)"
   uid_cmd="uid=\$(id -u $(printf '%q' "$RUNTIME_USER"))"
   user_systemctl="sudo -u $(printf '%q' "$RUNTIME_USER") -H env XDG_RUNTIME_DIR=/run/user/\$uid systemctl --user"
@@ -309,16 +310,19 @@ run_remote_mode() {
   expected_live_argv="$OPENCLAW_BIN gateway --port $GATEWAY_PORT"
   expected_fragment="$RUNTIME_HOME/.config/systemd/user/openclaw-gateway.service"
   exec_check_python='import sys; data=sys.stdin.read().strip(); expected=sys.argv[1]; parts=data.split("argv[]="); sys.exit(0 if len(parts) == 2 and parts[1].split(" ;", 1)[0].strip() == expected else 1)'
-  live_exec_check="${user_systemctl} is-active --quiet openclaw-gateway; ${user_systemctl} show openclaw-gateway -p ExecStart --value | python3 -c $(printf '%q' "$exec_check_python") $(printf '%q' "$expected_live_argv"); ${user_systemctl} show openclaw-gateway -p FragmentPath --value | grep -Fx -- $(printf '%q' "$expected_fragment") >/dev/null"
+  listener_check_python='import re,sys; expected=int(sys.argv[1]); rows=[row for row in sys.stdin.read().splitlines() if row.strip()]; ok=bool(rows) and all({int(pid) for pid in re.findall(r"\bpid=(\d+)(?=[,)])", row)} == {expected} for row in rows); sys.exit(0 if ok else 1)'
+  system_stop_cmd="system_load_state=\$(sudo systemctl show openclaw-gateway.service -p LoadState --value); if [ \"\$system_load_state\" != not-found ]; then sudo systemctl disable --now openclaw-gateway.service; fi"
+  system_absent_check="system_load_state=\$(sudo systemctl show openclaw-gateway.service -p LoadState --value); system_active_state=\$(sudo systemctl show openclaw-gateway.service -p ActiveState --value); if [ \"\$system_load_state\" != not-found ] || [ \"\$system_active_state\" != inactive ]; then echo 'error: system gateway unit is still loaded or active' >&2; exit 1; fi"
+  live_exec_check="${user_systemctl} is-active --quiet openclaw-gateway; ${user_systemctl} show openclaw-gateway -p ExecStart --value | python3 -c $(printf '%q' "$exec_check_python") $(printf '%q' "$expected_live_argv"); ${user_systemctl} show openclaw-gateway -p FragmentPath --value | grep -Fx -- $(printf '%q' "$expected_fragment") >/dev/null; main_pid=\$(${user_systemctl} show openclaw-gateway -p MainPID --value); case \"\$main_pid\" in ''|0|*[!0-9]*) echo 'error: user gateway has no valid MainPID' >&2; exit 1;; esac; if ! sudo ss -H -ltnp \"sport = :$GATEWAY_PORT\" | python3 -c $(printf '%q' "$listener_check_python") \"\$main_pid\"; then echo 'error: gateway listener is not owned exclusively by the expected user service' >&2; exit 1; fi"
   case "$mode" in
     dry-run)
       run_remote_script "$host" "\"\$tmp\" --dry-run-local --root / ${args}"
       ;;
     apply)
-      run_remote_script "$host" "sudo loginctl enable-linger $(printf '%q' "$RUNTIME_USER"); sudo \"\$tmp\" --apply-local --root / ${args}; ${ownership_cmd}; sudo systemctl disable --now openclaw-gateway >/dev/null 2>&1 || true; ${uid_cmd}; ${user_systemctl} daemon-reload; ${user_systemctl} enable openclaw-gateway; ${user_systemctl} restart openclaw-gateway; sudo \"\$tmp\" --validate-local --root / ${args}; ${live_exec_check}; ${user_systemctl} status openclaw-gateway --no-pager -l"
+      run_remote_script "$host" "sudo loginctl enable-linger $(printf '%q' "$RUNTIME_USER"); ${system_stop_cmd}; sudo \"\$tmp\" --apply-local --root / ${args}; sudo systemctl daemon-reload; ${system_absent_check}; ${ownership_cmd}; ${uid_cmd}; ${user_systemctl} daemon-reload; ${user_systemctl} enable openclaw-gateway; ${user_systemctl} restart openclaw-gateway; sudo \"\$tmp\" --validate-local --root / ${args}; ${system_absent_check}; ${live_exec_check}; ${user_systemctl} status openclaw-gateway --no-pager -l"
       ;;
     validate)
-      run_remote_script "$host" "sudo \"\$tmp\" --validate-local --root / ${args}; ${uid_cmd}; ${live_exec_check}; ${user_systemctl} status openclaw-gateway --no-pager -l"
+      run_remote_script "$host" "sudo \"\$tmp\" --validate-local --root / ${args}; ${system_absent_check}; ${uid_cmd}; ${live_exec_check}; ${user_systemctl} status openclaw-gateway --no-pager -l"
       ;;
     *)
       die "unsupported remote mode: $mode"

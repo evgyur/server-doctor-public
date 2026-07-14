@@ -52,7 +52,7 @@ test("remote modes reject option-shaped hosts before invoking ssh", () => {
   assert.match(result.stderr, /invalid --host/);
 });
 
-test("remote apply writes the user unit before stopping the system service and restarts it", () => {
+test("remote apply stops the system service before deleting its unit and restarts the user service", () => {
   const fakeBin = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-single-gateway-bin-"));
   const fakeSsh = path.join(fakeBin, "ssh");
   fs.writeFileSync(fakeSsh, '#!/bin/sh\nprintf "%s\\n" "$2"\ncat >/dev/null\n');
@@ -66,10 +66,59 @@ test("remote apply writes the user unit before stopping the system service and r
   const applyIndex = result.stdout.indexOf("--apply-local");
   const stopIndex = result.stdout.indexOf("systemctl disable --now");
   const restartIndex = result.stdout.indexOf("systemctl --user restart");
-  assert.ok(applyIndex >= 0, result.stdout);
-  assert.ok(stopIndex > applyIndex, result.stdout);
-  assert.ok(restartIndex > stopIndex, result.stdout);
+  assert.ok(stopIndex >= 0, result.stdout);
+  assert.ok(applyIndex > stopIndex, result.stdout);
+  assert.ok(restartIndex > applyIndex, result.stdout);
   assert.doesNotMatch(result.stdout, /chown -R/);
+});
+
+test("remote apply propagates a real system-service disable failure", () => {
+  const fakeBin = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-single-gateway-disable-"));
+  const fakeSsh = path.join(fakeBin, "ssh");
+  const fakeSudo = path.join(fakeBin, "sudo");
+  const fakeSystemctl = path.join(fakeBin, "systemctl");
+  const fakeLoginctl = path.join(fakeBin, "loginctl");
+  fs.writeFileSync(fakeSsh, '#!/bin/sh\nshift\nexec /bin/sh -c "$1"\n');
+  fs.writeFileSync(
+    fakeSudo,
+    '#!/bin/sh\ncase "$1" in /tmp/openclaw-single-gateway.sh.*) exit 0;; esac\nwhile [ "$1" = "-u" ] || [ "$1" = "-H" ]; do if [ "$1" = "-u" ]; then shift 2; else shift; fi; done\nexec "$@"\n'
+  );
+  fs.writeFileSync(
+    fakeSystemctl,
+    '#!/bin/sh\ncase "$*" in *"LoadState"*) printf "loaded\\n";; *"disable --now"*) exit 42;; esac\nexit 0\n'
+  );
+  fs.writeFileSync(fakeLoginctl, "#!/bin/sh\nexit 0\n");
+  for (const item of [fakeSsh, fakeSudo, fakeSystemctl, fakeLoginctl]) fs.chmodSync(item, 0o755);
+
+  const result = runScript(
+    ["--apply", "--host", "example-host"],
+    { PATH: `${fakeBin}:${process.env.PATH}` }
+  );
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+});
+
+test("remote validation rejects a still-active system gateway", () => {
+  const fakeBin = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-single-gateway-system-active-"));
+  const fakeSsh = path.join(fakeBin, "ssh");
+  const fakeSudo = path.join(fakeBin, "sudo");
+  const fakeSystemctl = path.join(fakeBin, "systemctl");
+  fs.writeFileSync(fakeSsh, '#!/bin/sh\nshift\nexec /bin/sh -c "$1"\n');
+  fs.writeFileSync(
+    fakeSudo,
+    '#!/bin/sh\ncase "$1" in /tmp/openclaw-single-gateway.sh.*) exit 0;; esac\nwhile [ "$1" = "-u" ] || [ "$1" = "-H" ]; do if [ "$1" = "-u" ]; then shift 2; else shift; fi; done\nexec "$@"\n'
+  );
+  fs.writeFileSync(
+    fakeSystemctl,
+    '#!/bin/sh\ncase "$*" in *"LoadState"*) printf "not-found\\n";; *"ActiveState"*) printf "active\\n";; esac\nexit 0\n'
+  );
+  for (const item of [fakeSsh, fakeSudo, fakeSystemctl]) fs.chmodSync(item, 0o755);
+
+  const result = runScript(
+    ["--validate", "--host", "example-host"],
+    { PATH: `${fakeBin}:${process.env.PATH}` }
+  );
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stderr, /system gateway unit is still loaded or active/);
 });
 
 test("remote validation preserves an inner nonzero exit", () => {
@@ -105,10 +154,67 @@ test("remote validation rejects a live ExecStart with extra arguments", () => {
   );
   fs.writeFileSync(
     fakeSystemctl,
-    `#!/bin/sh\ncase "$*" in *"is-active"*) exit 0;; *"ExecStart"*) printf "%s\\n" "argv[]=${openclawBin} gateway --port 8090 ; argv[]=/bin/sh -c unexpected ;";; *"FragmentPath"*) printf "%s\\n" "${runtimeHome}/.config/systemd/user/openclaw-gateway.service";; esac\nexit 0\n`
+    `#!/bin/sh\ncase "$*" in *"LoadState"*) printf "not-found\\n";; *"ActiveState"*) printf "inactive\\n";; *"--user is-active"*) exit 0;; *"ExecStart"*) printf "%s\\n" "argv[]=${openclawBin} gateway --port 8090 ; argv[]=/bin/sh -c unexpected ;";; *"FragmentPath"*) printf "%s\\n" "${runtimeHome}/.config/systemd/user/openclaw-gateway.service";; esac\nexit 0\n`
   );
   fs.writeFileSync(fakeId, "#!/bin/sh\nprintf '1000\\n'\n");
   for (const item of [fakeSsh, fakeSudo, fakeSystemctl, fakeId]) fs.chmodSync(item, 0o755);
+
+  const result = runScript(
+    ["--validate", "--host", "example-host"],
+    { PATH: `${fakeBin}:${process.env.PATH}` }
+  );
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+});
+
+test("remote validation accepts only the expected user service listener", () => {
+  const fakeBin = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-single-gateway-listener-"));
+  const fakeSsh = path.join(fakeBin, "ssh");
+  const fakeSudo = path.join(fakeBin, "sudo");
+  const fakeSystemctl = path.join(fakeBin, "systemctl");
+  const fakeId = path.join(fakeBin, "id");
+  const fakeSs = path.join(fakeBin, "ss");
+  fs.writeFileSync(fakeSsh, '#!/bin/sh\nshift\nexec /bin/sh -c "$1"\n');
+  fs.writeFileSync(
+    fakeSudo,
+    '#!/bin/sh\ncase "$1" in /tmp/openclaw-single-gateway.sh.*) exit 0;; esac\nwhile [ "$1" = "-u" ] || [ "$1" = "-H" ]; do if [ "$1" = "-u" ]; then shift 2; else shift; fi; done\nexec "$@"\n'
+  );
+  fs.writeFileSync(
+    fakeSystemctl,
+    `#!/bin/sh\ncase "$*" in *"LoadState"*) printf "not-found\\n";; *"ActiveState"*) printf "inactive\\n";; *"--user is-active"*) exit 0;; *"ExecStart"*) printf "%s\\n" "argv[]=${openclawBin} gateway --port 8090 ;";; *"FragmentPath"*) printf "%s\\n" "${runtimeHome}/.config/systemd/user/openclaw-gateway.service";; *"MainPID"*) printf "4242\\n";; *"status"*) exit 0;; esac\nexit 0\n`
+  );
+  fs.writeFileSync(fakeId, "#!/bin/sh\nprintf '1000\\n'\n");
+  fs.writeFileSync(fakeSs, '#!/bin/sh\nprintf "%s\\n" "LISTEN 0 128 0.0.0.0:8090 0.0.0.0:* users:((node,pid=4242,fd=7))"\n');
+  for (const item of [fakeSsh, fakeSudo, fakeSystemctl, fakeId, fakeSs]) fs.chmodSync(item, 0o755);
+
+  const result = runScript(
+    ["--validate", "--host", "example-host"],
+    { PATH: `${fakeBin}:${process.env.PATH}` }
+  );
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
+test("remote validation rejects a listener row shared with another PID", () => {
+  const fakeBin = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-single-gateway-mixed-listener-"));
+  const fakeSsh = path.join(fakeBin, "ssh");
+  const fakeSudo = path.join(fakeBin, "sudo");
+  const fakeSystemctl = path.join(fakeBin, "systemctl");
+  const fakeId = path.join(fakeBin, "id");
+  const fakeSs = path.join(fakeBin, "ss");
+  fs.writeFileSync(fakeSsh, '#!/bin/sh\nshift\nexec /bin/sh -c "$1"\n');
+  fs.writeFileSync(
+    fakeSudo,
+    '#!/bin/sh\ncase "$1" in /tmp/openclaw-single-gateway.sh.*) exit 0;; esac\nwhile [ "$1" = "-u" ] || [ "$1" = "-H" ]; do if [ "$1" = "-u" ]; then shift 2; else shift; fi; done\nexec "$@"\n'
+  );
+  fs.writeFileSync(
+    fakeSystemctl,
+    `#!/bin/sh\ncase "$*" in *"LoadState"*) printf "not-found\\n";; *"ActiveState"*) printf "inactive\\n";; *"--user is-active"*) exit 0;; *"ExecStart"*) printf "%s\\n" "argv[]=${openclawBin} gateway --port 8090 ;";; *"FragmentPath"*) printf "%s\\n" "${runtimeHome}/.config/systemd/user/openclaw-gateway.service";; *"MainPID"*) printf "4242\\n";; *"status"*) exit 0;; esac\nexit 0\n`
+  );
+  fs.writeFileSync(fakeId, "#!/bin/sh\nprintf '1000\\n'\n");
+  fs.writeFileSync(
+    fakeSs,
+    '#!/bin/sh\nprintf "%s\\n" "LISTEN 0 128 0.0.0.0:8090 0.0.0.0:* users:((node,pid=4242,fd=7),(other,pid=9999,fd=8))"\n'
+  );
+  for (const item of [fakeSsh, fakeSudo, fakeSystemctl, fakeId, fakeSs]) fs.chmodSync(item, 0o755);
 
   const result = runScript(
     ["--validate", "--host", "example-host"],
@@ -170,7 +276,7 @@ test("dry-run-local reports duplicate shared-state supervisors", () => {
   const stateDir = path.posix.join(runtimeHome, ".openclaw");
   writeFile(
     rooted(root, path.posix.join(runtimeHome, ".config/systemd/user/openclaw-gateway.service")),
-    `[Unit]\nDescription=OpenClaw Gateway\n\n[Service]\nExecStart=${openclawBin} gateway --port 8090\nEnvironment=TELEGRAM_BOT_TOKEN=test-token\n`
+    `[Unit]\nDescription=OpenClaw Gateway\n\n[Service]\nExecStart=${openclawBin} gateway --port 8090\nEnvironment=TELEGRAM_BOT_TOKEN=<fixture-token>\n`
   );
   writeFile(
     path.join(root, "etc/systemd/system/openclaw-gateway.service"),
@@ -197,7 +303,7 @@ test("apply-local writes a parameterized user unit, migrates env, and removes sy
   const systemUnit = path.join(root, "etc/systemd/system/openclaw-gateway.service");
   writeFile(
     userUnit,
-    `[Service]\nExecStart=${openclawBin} gateway --port 8090\nEnvironment=TELEGRAM_BOT_TOKEN=test-token\nEnvironment=OPENAI_API_KEY=test-openai\n`
+    `[Service]\nExecStart=${openclawBin} gateway --port 8090\nEnvironment=TELEGRAM_BOT_TOKEN=<fixture-token>\nEnvironment=OPENAI_API_KEY=<fixture-token>\n`
   );
   writeFile(
     systemUnit,
@@ -216,6 +322,6 @@ test("apply-local writes a parameterized user unit, migrates env, and removes sy
   assert.match(unitText, /WantedBy=default.target/);
   assert.doesNotMatch(unitText, /ExecStartPre=.*pkill -9 -f openclaw-gateway/);
   assert.ok(!fs.existsSync(systemUnit));
-  assert.match(envFile, /^TELEGRAM_BOT_TOKEN=test-token$/m);
-  assert.match(envFile, /^OPENAI_API_KEY=test-openai$/m);
+  assert.match(envFile, /^TELEGRAM_BOT_TOKEN=<fixture-token>$/m);
+  assert.match(envFile, /^OPENAI_API_KEY=<fixture-token>$/m);
 });

@@ -4,19 +4,18 @@ This reference lists public-safe command entrypoints included with `server-docto
 
 Commands should stay generic: use host aliases, environment variables, or operator-provided paths. Do not hardcode private IPs, chat IDs, usernames, tokens, or local-only directories in public scripts.
 
-## Vendored docs snapshot
+## Current official documentation
 
-Use `references/openclaw-docs/FILELIST.md` to discover pages in the bundled upstream snapshot. Check `references/openclaw-docs/state.json` before relying on version-sensitive details. If the snapshot is stale, use the live public documentation; this repository has no private refresh submodule.
+Use `https://docs.openclaw.ai` for current OpenClaw behavior and `https://hermes-agent.nousresearch.com/docs/llms-full.txt` for current Hermes Agent behavior. This repository intentionally does not bundle full documentation mirrors.
 
 ## Server health / remediation MVP
 
 ```bash
 ./scripts/doctor-mvp.sh check <host-alias-or-user@host> [output_dir]
-./scripts/doctor-mvp.sh fix <host-alias-or-user@host> [output_dir]
 ./scripts/doctor-mvp.sh preflight <host-alias-or-user@host> [output_dir]
 ```
 
-Use `check` before `fix`. Keep output artifacts out of public commits unless they are sanitized examples.
+The MVP helper is diagnostic-only. Make repairs manually from an approved runbook with rollback and post-change verification. Keep output artifacts out of public commits unless they are sanitized examples.
 
 ## Telegram group agent binding check
 
@@ -56,31 +55,22 @@ Use for transport drift where the runtime is alive but Telegram delivery is brok
 
 Use when configured model/provider auth differs between runtime profile and per-agent profile.
 
-## OpenClaw bootstrap hygiene
-
-```bash
-./scripts/openclaw-bootstrap-hygiene.sh --dry-run --host <host-alias> --workspace-root <path>
-./scripts/openclaw-bootstrap-hygiene.sh --apply --host <host-alias> --workspace-root <path>
-./scripts/openclaw-bootstrap-hygiene.sh --validate --host <host-alias> --workspace-root <path>
-```
-
-Use when bootstrapping files, hooks, or context loaders are causing latency or stale instructions.
-
 ## OpenClaw single-gateway canonicalization
 
 ```bash
-./scripts/openclaw-single-gateway.sh --dry-run --host <host-alias> --runtime-user <user>
-./scripts/openclaw-single-gateway.sh --apply --host <host-alias> --runtime-user <user>
-./scripts/openclaw-single-gateway.sh --validate --host <host-alias> --runtime-user <user>
+./scripts/openclaw-single-gateway.sh --dry-run --host <host-alias> --runtime-user <service-user>
+./scripts/openclaw-single-gateway.sh --apply --host <host-alias> --runtime-user <service-user>
+./scripts/openclaw-single-gateway.sh --validate --host <host-alias> --runtime-user <service-user>
 ```
 
-Use on hosts where two gateways compete for the same bot, port, or delivery lane. Confirm ownership before applying.
+Use on hosts where two gateways compete for the same bot, port, or delivery lane. Confirm ownership, runtime user, binary path, and canonical port before applying.
 
 ## macOS single OpenClaw runtime
 
 ```bash
 ./scripts/macos-single-openclaw-runtime.sh --dry-run
 ./scripts/macos-single-openclaw-runtime.sh --apply
+./scripts/macos-single-openclaw-runtime.sh --validate
 ```
 
 Use for local macOS LaunchAgent/runtime duplication. Do not apply it to Linux hosts.
