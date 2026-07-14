@@ -231,7 +231,8 @@ ensure_sshd_setting() {
 # 1) SSH hardening (safe)
 cfg="/etc/ssh/sshd_config"
 can_harden=0
-if [[ -s "$HOME/.ssh/authorized_keys" || -s "/root/.ssh/authorized_keys" ]]; then
+root_home="$(getent passwd root 2>/dev/null | cut -d: -f6)"
+if [[ -s "$HOME/.ssh/authorized_keys" || ( -n "$root_home" && -s "$root_home/.ssh/authorized_keys" ) ]]; then
   can_harden=1
 fi
 if [[ -n "${SUDO_USER:-}" && -s "/home/${SUDO_USER}/.ssh/authorized_keys" ]]; then

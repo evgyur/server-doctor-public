@@ -163,3 +163,23 @@ if bash "$helper" --dry-run --host '-oProxyCommand=unexpected' --workspace-root 
 fi
 
 echo "ok host-validation"
+
+duplicate_root="$tmpdir/duplicate-root"
+mkdir -p "$duplicate_root"
+printf 'ORIGINAL DRIFT\n' > "$duplicate_root/AGENTS.md"
+printf 'ORIGINAL TOOLS DRIFT\n' > "$duplicate_root/TOOLS.md"
+bash "$helper" --apply-local --root "$duplicate_root" --root "$duplicate_root" > "$tmpdir/duplicate-apply.json"
+
+python3 - "$tmpdir/duplicate-apply.json" <<'PY'
+import json
+import pathlib
+import sys
+
+report = json.load(open(sys.argv[1], encoding="utf-8"))
+assert len(report["roots"]) == 1, report
+backup = pathlib.Path(report["roots"][0]["backupDir"])
+assert "ORIGINAL DRIFT" in (backup / "AGENTS.md.bak").read_text(encoding="utf-8")
+assert "ORIGINAL TOOLS DRIFT" in (backup / "TOOLS.md.bak").read_text(encoding="utf-8")
+PY
+
+echo "ok duplicate-root"

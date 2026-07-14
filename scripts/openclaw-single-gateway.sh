@@ -27,10 +27,15 @@ die() {
 }
 
 validate_inputs() {
-  [[ "$RUNTIME_USER" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]] || die "invalid --runtime-user"
+  [[ "$RUNTIME_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || die "invalid --runtime-user"
   [[ "$RUNTIME_HOME" == /* ]] || die "--runtime-home must be absolute"
   [[ "$OPENCLAW_BIN" == /* ]] || die "--openclaw-bin must be absolute"
-  [[ "$GATEWAY_PORT" =~ ^[0-9]+$ ]] || die "--gateway-port must be numeric"
+  [[ "$RUNTIME_HOME" =~ ^/[A-Za-z0-9._/-]+$ ]] || die "--runtime-home contains unsafe characters"
+  [[ "$OPENCLAW_BIN" =~ ^/[A-Za-z0-9._/-]+$ ]] || die "--openclaw-bin contains unsafe characters"
+  [[ "/$RUNTIME_HOME/" != *"/../"* ]] || die "--runtime-home must not contain .."
+  [[ "/$OPENCLAW_BIN/" != *"/../"* ]] || die "--openclaw-bin must not contain .."
+  [[ "$GATEWAY_PORT" =~ ^[0-9]+$ && ${#GATEWAY_PORT} -le 5 ]] || die "--gateway-port must be numeric"
+  (( 10#$GATEWAY_PORT >= 1 && 10#$GATEWAY_PORT <= 65535 )) || die "--gateway-port must be between 1 and 65535"
 }
 
 emit_python_program() {
@@ -46,23 +51,37 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 MODE = sys.argv[1]
-ROOT = Path(sys.argv[2])
+ROOT = Path(sys.argv[2]).resolve(strict=True)
 RUNTIME_USER = sys.argv[3]
 RUNTIME_HOME_VALUE = Path(sys.argv[4])
 OPENCLAW_BIN_VALUE = Path(sys.argv[5])
 CANONICAL_PORT = int(sys.argv[6])
 
 
+def fail(message: str, code: int = 1) -> None:
+    print(json.dumps({"status": "error", "error": message}, indent=2))
+    raise SystemExit(code)
+
+
 def under_root(path: Path) -> Path:
-    return ROOT / path.relative_to("/")
+    if not path.is_absolute() or ".." in path.parts:
+        fail(f"unsafe absolute path: {path}")
+    candidate = (ROOT / path.relative_to("/")).resolve(strict=False)
+    try:
+        candidate.relative_to(ROOT)
+    except ValueError:
+        fail(f"path escapes filesystem root: {path}")
+    return candidate
 
 
 HOME_DIR = under_root(RUNTIME_HOME_VALUE)
-STATE_DIR = HOME_DIR / ".openclaw"
-USER_UNIT = HOME_DIR / ".config/systemd/user/openclaw-gateway.service"
-SYSTEM_UNIT = ROOT / "etc/systemd/system/openclaw-gateway.service"
-ENV_FILE = STATE_DIR / ".env"
-BACKUP_BASE = STATE_DIR / "backups"
+STATE_DIR = under_root(RUNTIME_HOME_VALUE / ".openclaw")
+USER_UNIT = under_root(
+    RUNTIME_HOME_VALUE / ".config/systemd/user/openclaw-gateway.service"
+)
+SYSTEM_UNIT = under_root(Path("/etc/systemd/system/openclaw-gateway.service"))
+ENV_FILE = under_root(RUNTIME_HOME_VALUE / ".openclaw/.env")
+BACKUP_BASE = under_root(RUNTIME_HOME_VALUE / ".openclaw/backups")
 CANONICAL_STATE_DIR = str(RUNTIME_HOME_VALUE / ".openclaw")
 OPENCLAW_BIN = str(OPENCLAW_BIN_VALUE)
 
@@ -77,12 +96,6 @@ IGNORED_ENV_KEYS = {
     "OPENCLAW_SERVICE_KIND",
     "OPENCLAW_SERVICE_VERSION",
 }
-
-
-def fail(message: str, code: int = 1) -> None:
-    print(json.dumps({"status": "error", "error": message}, indent=2))
-    raise SystemExit(code)
-
 
 def read_text(path: Path) -> str:
     if not path.exists():
@@ -220,9 +233,9 @@ def build_report() -> dict:
 
 
 def apply_changes(report: dict) -> dict:
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
     backup_dir = BACKUP_BASE / f"openclaw-single-gateway-{timestamp}"
-    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_dir.mkdir(parents=True, exist_ok=False)
     for source, backup_name in (
         (USER_UNIT, "openclaw-gateway.user.service.bak"),
         (SYSTEM_UNIT, "openclaw-gateway.system.service.bak"),
@@ -276,7 +289,9 @@ run_remote_script() {
   local remote_command="$2"
   local tmp_name
   tmp_name="$(basename "$0")"
-  ssh "$host" "tmp=\$(mktemp /tmp/${tmp_name}.XXXXXX); cat >\"\$tmp\"; chmod +x \"\$tmp\"; ${remote_command}; status=\$?; rm -f \"\$tmp\"; exit \$status" < "$0"
+  # The command is deliberately assembled and shell-quoted on the client.
+  # shellcheck disable=SC2029
+  ssh "$host" "set -eu; tmp=\$(mktemp /tmp/${tmp_name}.XXXXXX); trap 'rm -f \"\$tmp\"' EXIT HUP INT TERM; cat >\"\$tmp\"; chmod +x \"\$tmp\"; ${remote_command}" < "$0"
 }
 
 remote_local_args() {
@@ -286,19 +301,24 @@ remote_local_args() {
 run_remote_mode() {
   local mode="$1"
   local host="$2"
-  local args uid_cmd user_systemctl
+  local args uid_cmd user_systemctl ownership_cmd live_exec_check expected_live_argv expected_fragment exec_check_python
   args="$(remote_local_args)"
   uid_cmd="uid=\$(id -u $(printf '%q' "$RUNTIME_USER"))"
   user_systemctl="sudo -u $(printf '%q' "$RUNTIME_USER") -H env XDG_RUNTIME_DIR=/run/user/\$uid systemctl --user"
+  ownership_cmd="sudo chown $(printf '%q' "$RUNTIME_USER:") $(printf '%q' "$RUNTIME_HOME") $(printf '%q' "$RUNTIME_HOME/.openclaw") $(printf '%q' "$RUNTIME_HOME/.openclaw/backups") $(printf '%q' "$RUNTIME_HOME/.config") $(printf '%q' "$RUNTIME_HOME/.config/systemd") $(printf '%q' "$RUNTIME_HOME/.config/systemd/user") $(printf '%q' "$RUNTIME_HOME/.config/systemd/user/openclaw-gateway.service"); if [ -e $(printf '%q' "$RUNTIME_HOME/.openclaw/.env") ]; then sudo chown $(printf '%q' "$RUNTIME_USER:") $(printf '%q' "$RUNTIME_HOME/.openclaw/.env"); fi"
+  expected_live_argv="$OPENCLAW_BIN gateway --port $GATEWAY_PORT"
+  expected_fragment="$RUNTIME_HOME/.config/systemd/user/openclaw-gateway.service"
+  exec_check_python='import sys; data=sys.stdin.read().strip(); expected=sys.argv[1]; parts=data.split("argv[]="); sys.exit(0 if len(parts) == 2 and parts[1].split(" ;", 1)[0].strip() == expected else 1)'
+  live_exec_check="${user_systemctl} is-active --quiet openclaw-gateway; ${user_systemctl} show openclaw-gateway -p ExecStart --value | python3 -c $(printf '%q' "$exec_check_python") $(printf '%q' "$expected_live_argv"); ${user_systemctl} show openclaw-gateway -p FragmentPath --value | grep -Fx -- $(printf '%q' "$expected_fragment") >/dev/null"
   case "$mode" in
     dry-run)
       run_remote_script "$host" "\"\$tmp\" --dry-run-local --root / ${args}"
       ;;
     apply)
-      run_remote_script "$host" "sudo loginctl enable-linger $(printf '%q' "$RUNTIME_USER"); sudo \"\$tmp\" --apply-local --root / ${args}; sudo chown -R $(printf '%q' "$RUNTIME_USER:") $(printf '%q' "$RUNTIME_HOME/.openclaw") $(printf '%q' "$RUNTIME_HOME/.config/systemd") 2>/dev/null || true; sudo systemctl disable --now openclaw-gateway >/dev/null 2>&1 || true; ${uid_cmd}; ${user_systemctl} daemon-reload; ${user_systemctl} enable openclaw-gateway; ${user_systemctl} restart openclaw-gateway; sudo \"\$tmp\" --validate-local --root / ${args}; ${user_systemctl} status openclaw-gateway --no-pager -l"
+      run_remote_script "$host" "sudo loginctl enable-linger $(printf '%q' "$RUNTIME_USER"); sudo \"\$tmp\" --apply-local --root / ${args}; ${ownership_cmd}; sudo systemctl disable --now openclaw-gateway >/dev/null 2>&1 || true; ${uid_cmd}; ${user_systemctl} daemon-reload; ${user_systemctl} enable openclaw-gateway; ${user_systemctl} restart openclaw-gateway; sudo \"\$tmp\" --validate-local --root / ${args}; ${live_exec_check}; ${user_systemctl} status openclaw-gateway --no-pager -l"
       ;;
     validate)
-      run_remote_script "$host" "sudo \"\$tmp\" --validate-local --root / ${args}; ${uid_cmd}; ${user_systemctl} status openclaw-gateway --no-pager -l"
+      run_remote_script "$host" "sudo \"\$tmp\" --validate-local --root / ${args}; ${uid_cmd}; ${live_exec_check}; ${user_systemctl} status openclaw-gateway --no-pager -l"
       ;;
     *)
       die "unsupported remote mode: $mode"

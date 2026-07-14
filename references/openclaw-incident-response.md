@@ -423,7 +423,7 @@ Also inspect `~/.openclaw/openclaw.json` for:
 
 - native `openai/*` plus Codex runtime is rolled back to `openai-codex/*` plus Pi runtime, but some Telegram lanes still fail
 - DM replies mention a missing OpenAI API key even though `codex-profile-manager.py apply-pi-route` succeeded
-- logs continue to show `No API key found for provider "openai"` from `opscron`, `chipdigest`, or other cron lanes
+- logs continue to show `No API key found for provider "openai"` from `opscron`, `daily-digest`, or other cron lanes
 - a topic replies to stale context instead of the fresh smoke marker after the route rollback
 
 #### Root cause

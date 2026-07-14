@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -10,10 +11,22 @@ SCRIPT = ROOT / "scripts" / "check-public-safety.py"
 
 
 class PublicSafetyScannerTests(unittest.TestCase):
-    def run_scan(self, text: str) -> subprocess.CompletedProcess[str]:
+    def run_scan(self, text: str, filename: str = "fixture.md") -> subprocess.CompletedProcess[str]:
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "fixture.md"
+            path = Path(tmp) / filename
             path.write_text(text, encoding="utf-8")
+            return subprocess.run(
+                ["python3", str(SCRIPT), "--paths", str(path)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+    def run_scan_bytes(self, content: bytes) -> subprocess.CompletedProcess[str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "fixture.bin"
+            path.write_bytes(content)
             return subprocess.run(
                 ["python3", str(SCRIPT), "--paths", str(path)],
                 cwd=ROOT,
@@ -45,6 +58,114 @@ class PublicSafetyScannerTests(unittest.TestCase):
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("blocked by telegram-chat-id", proc.stdout)
         self.assertIn("blocked by absolute-user-home", proc.stdout)
+
+    def test_compound_private_identity_and_owner_outside_public_url_fail(self) -> None:
+        lane = "ch" + "ip" + "digest"
+        owner = "ev" + "gyur"
+        proc = self.run_scan(f"Lane: {lane}\nOperator: {owner}\n")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("blocked by private-marker", proc.stdout)
+        self.assertIn("blocked by public-owner-outside-repo-url", proc.stdout)
+        self.assertNotIn(lane, proc.stdout)
+        self.assertNotIn(owner, proc.stdout)
+
+    def test_public_owner_is_allowed_only_in_canonical_repo_url(self) -> None:
+        owner = "ev" + "gyur"
+        url = f"https://github.com/{owner}/server-doctor-public"
+        proc = self.run_scan(f"Clone: {url}\n")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+    def test_every_ipv4_match_is_checked(self) -> None:
+        private_ip = "10." + "23.45.67"
+        proc = self.run_scan(f"Loopback: 127.0.0.1; target: {private_ip}\n")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("blocked by ipv4-address", proc.stdout)
+        self.assertNotIn(private_ip, proc.stdout)
+
+    def test_home_without_trailing_slash_and_root_path_fail(self) -> None:
+        home = "/" + "home" + "/privateoperator"
+        root_path = "/" + "root" + "/private/config"
+        proc = self.run_scan(f"Home: {home}\nRoot: {root_path}\n")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertGreaterEqual(proc.stdout.count("blocked by absolute-user-home"), 2)
+
+    def test_sensitive_identity_in_tracked_path_shape_fails(self) -> None:
+        lane = "ch" + "ip" + "digest"
+        proc = self.run_scan("portable content\n", filename=f"{lane}.md")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("blocked by tracked-path-private-marker", proc.stdout)
+        self.assertNotIn(lane, proc.stdout)
+
+    def test_non_utf8_input_fails_closed(self) -> None:
+        proc = self.run_scan_bytes(b"\xff\xfe\x00")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("blocked by unreadable-or-non-utf8-file", proc.stdout)
+
+    def test_staged_binary_file_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            scripts = repo / "scripts"
+            scripts.mkdir()
+            scanner = scripts / "check-public-safety.py"
+            shutil.copy2(SCRIPT, scanner)
+            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+            binary = repo / "artifact.bin"
+            binary.write_bytes(b"\xff\xfe\x00")
+            subprocess.run(["git", "add", "artifact.bin"], cwd=repo, check=True)
+            binary.write_text("working tree is text now\n", encoding="utf-8")
+            proc = subprocess.run(
+                ["python3", str(scanner), "--staged"],
+                cwd=repo,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("blocked by unreadable-or-non-utf8-file", proc.stdout)
+
+    def test_staged_rename_checks_destination_path_without_content_change(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            scripts = repo / "scripts"
+            scripts.mkdir()
+            scanner = scripts / "check-public-safety.py"
+            shutil.copy2(SCRIPT, scanner)
+            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+            source = repo / "portable.md"
+            source.write_text("portable content\n", encoding="utf-8")
+            subprocess.run(["git", "add", "portable.md"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-qm", "base"], cwd=repo, check=True)
+            lane = "ch" + "ip" + "digest"
+            subprocess.run(["git", "mv", "portable.md", f"{lane}.md"], cwd=repo, check=True)
+            proc = subprocess.run(
+                ["python3", str(scanner), "--staged"],
+                cwd=repo,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("blocked by tracked-path-private-marker", proc.stdout)
+        self.assertNotIn(lane, proc.stdout)
+
+    def test_sensitive_non_utf8_path_is_suppressed_for_every_finding(self) -> None:
+        lane = "ch" + "ip" + "secret"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / f"{lane}.bin"
+            path.write_bytes(b"\xff\xfe\x00")
+            proc = subprocess.run(
+                ["python3", str(SCRIPT), "--paths", str(path)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("blocked by tracked-path-private-marker", proc.stdout)
+        self.assertIn("blocked by unreadable-or-non-utf8-file", proc.stdout)
+        self.assertNotIn(lane, proc.stdout)
 
     def test_tracked_authored_tree_passes(self) -> None:
         proc = subprocess.run(
