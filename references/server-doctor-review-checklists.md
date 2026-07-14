@@ -14,10 +14,11 @@ Use these checklists after structural changes to the `server-doctor` skill or it
 - [ ] `references/agent-tasking-for-server-ops.md` remains valid.
 - [ ] `references/server-doctor-fast-paths.md` remains valid.
 - [ ] `references/server-doctor-command-layer.md` remains valid.
-- [ ] `npm run sync-openclaw-docs` remains documented.
+- [ ] The vendored docs snapshot is provenance-labelled and excluded from the authored privacy gate.
 - [ ] `scripts/doctor-mvp.sh` remains documented and callable.
 - [ ] Public scripts do not hardcode private hosts, chat IDs, account names, or tokens.
 - [ ] Public examples use placeholders such as `<host-alias>` and `<service>`.
+- [ ] `python3 scripts/check-public-safety.py --authored` passes.
 
 ## Manual review checklist
 

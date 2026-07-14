@@ -4,13 +4,9 @@ This reference lists public-safe command entrypoints included with `server-docto
 
 Commands should stay generic: use host aliases, environment variables, or operator-provided paths. Do not hardcode private IPs, chat IDs, usernames, tokens, or local-only directories in public scripts.
 
-## Local docs mirror
+## Vendored docs snapshot
 
-```bash
-npm run sync-openclaw-docs
-```
-
-Use when the local public docs mirror needs to be refreshed before reviewing OpenClaw behavior.
+Use `references/openclaw-docs/FILELIST.md` to discover pages in the bundled upstream snapshot. Check `references/openclaw-docs/state.json` before relying on version-sensitive details. If the snapshot is stale, use the live public documentation; this repository has no private refresh submodule.
 
 ## Server health / remediation MVP
 
@@ -63,9 +59,9 @@ Use when configured model/provider auth differs between runtime profile and per-
 ## OpenClaw bootstrap hygiene
 
 ```bash
-./scripts/openclaw-bootstrap-hygiene.sh --dry-run --host <host-alias>
-./scripts/openclaw-bootstrap-hygiene.sh --apply --host <host-alias>
-./scripts/openclaw-bootstrap-hygiene.sh --validate --host <host-alias>
+./scripts/openclaw-bootstrap-hygiene.sh --dry-run --host <host-alias> --workspace-root <path>
+./scripts/openclaw-bootstrap-hygiene.sh --apply --host <host-alias> --workspace-root <path>
+./scripts/openclaw-bootstrap-hygiene.sh --validate --host <host-alias> --workspace-root <path>
 ```
 
 Use when bootstrapping files, hooks, or context loaders are causing latency or stale instructions.
@@ -73,9 +69,9 @@ Use when bootstrapping files, hooks, or context loaders are causing latency or s
 ## OpenClaw single-gateway canonicalization
 
 ```bash
-./scripts/openclaw-single-gateway.sh --dry-run --host <host-alias>
-./scripts/openclaw-single-gateway.sh --apply --host <host-alias>
-./scripts/openclaw-single-gateway.sh --validate --host <host-alias>
+./scripts/openclaw-single-gateway.sh --dry-run --host <host-alias> --runtime-user <user>
+./scripts/openclaw-single-gateway.sh --apply --host <host-alias> --runtime-user <user>
+./scripts/openclaw-single-gateway.sh --validate --host <host-alias> --runtime-user <user>
 ```
 
 Use on hosts where two gateways compete for the same bot, port, or delivery lane. Confirm ownership before applying.
@@ -85,7 +81,6 @@ Use on hosts where two gateways compete for the same bot, port, or delivery lane
 ```bash
 ./scripts/macos-single-openclaw-runtime.sh --dry-run
 ./scripts/macos-single-openclaw-runtime.sh --apply
-./scripts/macos-single-openclaw-runtime.sh --validate
 ```
 
 Use for local macOS LaunchAgent/runtime duplication. Do not apply it to Linux hosts.

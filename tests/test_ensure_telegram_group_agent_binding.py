@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "ensure-telegram-group-agent-binding.py"
+SYNTHETIC_CHAT_ID = "-100" + "1234567890"
 
 
 class EnsureTelegramGroupAgentBindingTest(unittest.TestCase):
@@ -18,7 +19,7 @@ class EnsureTelegramGroupAgentBindingTest(unittest.TestCase):
                 "--config",
                 str(config),
                 "--chat-id",
-                "-1001234567890",
+                SYNTHETIC_CHAT_ID,
                 "--agent-id",
                 "tg-agent",
                 "--skill-id",
@@ -28,7 +29,7 @@ class EnsureTelegramGroupAgentBindingTest(unittest.TestCase):
                 "--agent-workspace",
                 "/workspace/tg-agent",
                 "--skill-source",
-                "/skills/private/tg/SKILL.md",
+                "/skills/example/tg/SKILL.md",
                 *extra,
             ],
             text=True,
@@ -54,12 +55,12 @@ class EnsureTelegramGroupAgentBindingTest(unittest.TestCase):
             data = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(data["agents"]["list"][0]["id"], "tg-agent")
             self.assertEqual(data["bindings"][0]["agentId"], "tg-agent")
-            group = data["channels"]["telegram"]["groups"]["-1001234567890"]
+            group = data["channels"]["telegram"]["groups"][SYNTHETIC_CHAT_ID]
             self.assertTrue(group["enabled"])
             self.assertFalse(group["requireMention"])
             self.assertIn("tg-skill", group["skills"])
             self.assertIn("CANONICAL SKILL ROUTING", group["systemPrompt"])
-            self.assertIn("/skills/private/tg/SKILL.md", group["systemPrompt"])
+            self.assertIn("/skills/example/tg/SKILL.md", group["systemPrompt"])
 
             again = self.run_script(path, "--rewrite-prompt", "--no-require-mention")
             self.assertEqual(again.stdout.strip(), "unchanged")

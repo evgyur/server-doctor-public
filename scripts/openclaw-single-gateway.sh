@@ -4,23 +4,20 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  openclaw-single-gateway.sh --dry-run --host <ssh-host>
-  openclaw-single-gateway.sh --apply --host <ssh-host>
-  openclaw-single-gateway.sh --validate --host <ssh-host>
-  openclaw-single-gateway.sh --dry-run-local --root <filesystem-root>
-  openclaw-single-gateway.sh --apply-local --root <filesystem-root>
-  openclaw-single-gateway.sh --validate-local --root <filesystem-root>
+  openclaw-single-gateway.sh --dry-run --host <ssh-host> --runtime-user <user> [options]
+  openclaw-single-gateway.sh --apply --host <ssh-host> --runtime-user <user> [options]
+  openclaw-single-gateway.sh --validate --host <ssh-host> --runtime-user <user> [options]
+  openclaw-single-gateway.sh --dry-run-local --root <filesystem-root> --runtime-user <user> [options]
+  openclaw-single-gateway.sh --apply-local --root <filesystem-root> --runtime-user <user> [options]
+  openclaw-single-gateway.sh --validate-local --root <filesystem-root> --runtime-user <user> [options]
 
-Public modes:
-  --dry-run   Inspect a host for duplicate OpenClaw supervisors sharing one state dir.
-  --apply     Promote one canonical user service on port 8090 and remove the system unit.
-  --validate  Fail unless the host is on the canonical single-gateway shape.
+Options:
+  --runtime-home <path>  Default: /home/<runtime-user>
+  --openclaw-bin <path>  Default: <runtime-home>/.npm-global/bin/openclaw
+  --gateway-port <port>  Default: 8090
 
-Test/helper modes:
-  --dry-run-local --root <filesystem-root>
-  --apply-local --root <filesystem-root>
-  --validate-local --root <filesystem-root>
-              Run against a local filesystem tree without SSH or systemctl.
+The helper keeps one user-level OpenClaw gateway and removes a conflicting
+system-level unit after writing timestamped backups. Remote apply requires sudo.
 EOF
 }
 
@@ -29,12 +26,18 @@ die() {
   exit 1
 }
 
+validate_inputs() {
+  [[ "$RUNTIME_USER" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]] || die "invalid --runtime-user"
+  [[ "$RUNTIME_HOME" == /* ]] || die "--runtime-home must be absolute"
+  [[ "$OPENCLAW_BIN" == /* ]] || die "--openclaw-bin must be absolute"
+  [[ "$GATEWAY_PORT" =~ ^[0-9]+$ ]] || die "--gateway-port must be numeric"
+}
+
 emit_python_program() {
   cat <<'PY'
 from __future__ import annotations
 
 import json
-import re
 import shutil
 import sys
 import textwrap
@@ -42,17 +45,26 @@ from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-
 MODE = sys.argv[1]
 ROOT = Path(sys.argv[2])
-HOME_DIR = ROOT / "home" / "chip"
+RUNTIME_USER = sys.argv[3]
+RUNTIME_HOME_VALUE = Path(sys.argv[4])
+OPENCLAW_BIN_VALUE = Path(sys.argv[5])
+CANONICAL_PORT = int(sys.argv[6])
+
+
+def under_root(path: Path) -> Path:
+    return ROOT / path.relative_to("/")
+
+
+HOME_DIR = under_root(RUNTIME_HOME_VALUE)
 STATE_DIR = HOME_DIR / ".openclaw"
 USER_UNIT = HOME_DIR / ".config/systemd/user/openclaw-gateway.service"
 SYSTEM_UNIT = ROOT / "etc/systemd/system/openclaw-gateway.service"
 ENV_FILE = STATE_DIR / ".env"
 BACKUP_BASE = STATE_DIR / "backups"
-CANONICAL_PORT = 8090
-CANONICAL_STATE_DIR = "/home/chip/.openclaw"
+CANONICAL_STATE_DIR = str(RUNTIME_HOME_VALUE / ".openclaw")
+OPENCLAW_BIN = str(OPENCLAW_BIN_VALUE)
 
 IGNORED_ENV_KEYS = {
     "HOME",
@@ -108,15 +120,14 @@ def parse_environment_lines(text: str) -> dict[str, str]:
 
 
 def parse_port(text: str) -> int | None:
+    import re
+
     match = re.search(r"--port\s+(\d+)", text)
-    if not match:
-        return None
-    return int(match.group(1))
+    return int(match.group(1)) if match else None
 
 
 def parse_state_dir(text: str) -> str | None:
-    env = parse_environment_lines(text)
-    return env.get("OPENCLAW_STATE_DIR")
+    return parse_environment_lines(text).get("OPENCLAW_STATE_DIR")
 
 
 def parse_env_file(path: Path) -> dict[str, str]:
@@ -141,12 +152,15 @@ def canonical_user_unit() -> str:
     return normalize_text(
         f"""
         [Unit]
-        Description=OpenClaw Gateway (canonical single gateway, run as chip)
+        Description=OpenClaw Gateway (canonical single gateway)
         After=network-online.target
         Wants=network-online.target
 
         [Service]
-        ExecStart=/home/chip/.npm-global/bin/openclaw gateway --port {CANONICAL_PORT}
+        Environment=HOME={RUNTIME_HOME_VALUE}
+        Environment=OPENCLAW_STATE_DIR={CANONICAL_STATE_DIR}
+        EnvironmentFile=-{CANONICAL_STATE_DIR}/.env
+        ExecStart={OPENCLAW_BIN} gateway --port {CANONICAL_PORT}
         Restart=always
         RestartSec=5
 
@@ -165,7 +179,7 @@ def build_report() -> dict:
     system_state_dir = parse_state_dir(system_text)
     user_port = parse_port(user_text)
     system_port = parse_port(system_text)
-    env_keys_to_migrate = sorted(key for key in user_env.keys() if key not in IGNORED_ENV_KEYS)
+    env_keys_to_migrate = sorted(key for key in user_env if key not in IGNORED_ENV_KEYS)
     duplicate_shared_state = (
         user_unit_exists
         and system_unit_exists
@@ -173,7 +187,6 @@ def build_report() -> dict:
     )
     system_has_pkill_prestart = "pkill -9 -f openclaw-gateway" in system_text
     user_unit_matches = normalize_text(user_text) == canonical_user_unit()
-
     status = "ok"
     if (
         duplicate_shared_state
@@ -184,10 +197,11 @@ def build_report() -> dict:
         or not user_unit_matches
     ):
         status = "drift"
-
     return {
         "status": status,
         "root": str(ROOT),
+        "runtimeUser": RUNTIME_USER,
+        "runtimeHome": str(RUNTIME_HOME_VALUE),
         "userUnitExists": user_unit_exists,
         "systemUnitExists": system_unit_exists,
         "userUnitPath": str(USER_UNIT),
@@ -209,61 +223,44 @@ def apply_changes(report: dict) -> dict:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     backup_dir = BACKUP_BASE / f"openclaw-single-gateway-{timestamp}"
     backup_dir.mkdir(parents=True, exist_ok=True)
-
-    if USER_UNIT.exists():
-        shutil.copy2(USER_UNIT, backup_dir / "openclaw-gateway.user.service.bak")
-    if SYSTEM_UNIT.exists():
-        shutil.copy2(SYSTEM_UNIT, backup_dir / "openclaw-gateway.system.service.bak")
-    if ENV_FILE.exists():
-        shutil.copy2(ENV_FILE, backup_dir / ".env.bak")
+    for source, backup_name in (
+        (USER_UNIT, "openclaw-gateway.user.service.bak"),
+        (SYSTEM_UNIT, "openclaw-gateway.system.service.bak"),
+        (ENV_FILE, ".env.bak"),
+    ):
+        if source.exists():
+            shutil.copy2(source, backup_dir / backup_name)
 
     merged_env = parse_env_file(ENV_FILE)
-    user_env = parse_environment_lines(read_text(USER_UNIT))
-    for key in sorted(user_env):
-        if key in IGNORED_ENV_KEYS:
-            continue
-        merged_env.setdefault(key, user_env[key])
-
+    for key, value in parse_environment_lines(read_text(USER_UNIT)).items():
+        if key not in IGNORED_ENV_KEYS:
+            merged_env.setdefault(key, value)
     if merged_env:
         write_text_atomic(ENV_FILE, render_env_file(merged_env))
     elif ENV_FILE.exists():
         ENV_FILE.unlink()
 
     write_text_atomic(USER_UNIT, canonical_user_unit())
-
     if SYSTEM_UNIT.exists():
         SYSTEM_UNIT.unlink()
 
     updated = build_report()
     updated["status"] = "updated"
     updated["backupDir"] = str(backup_dir)
-    updated["migratedEnvKeys"] = sorted(key for key in merged_env.keys() if key not in IGNORED_ENV_KEYS)
+    updated["migratedEnvKeys"] = sorted(key for key in merged_env if key not in IGNORED_ENV_KEYS)
     return updated
 
 
 report = build_report()
-
 if MODE == "dry-run":
     print(json.dumps(report, indent=2))
     raise SystemExit(0)
-
 if MODE == "apply":
     print(json.dumps(apply_changes(report), indent=2))
     raise SystemExit(0)
-
 if MODE == "validate":
     print(json.dumps(report, indent=2))
-    if (
-        report["status"] == "ok"
-        and report["userPort"] == CANONICAL_PORT
-        and report["userUnitExists"]
-        and not report["systemUnitExists"]
-        and not report["systemHasPkillPrestart"]
-        and report["canonicalUserUnitMatches"]
-    ):
-        raise SystemExit(0)
-    raise SystemExit(1)
-
+    raise SystemExit(0 if report["status"] == "ok" else 1)
 fail(f"unsupported mode: {MODE}")
 PY
 }
@@ -271,31 +268,37 @@ PY
 run_local_mode() {
   local mode="$1"
   local root="$2"
-  emit_python_program | python3 - "$mode" "$root"
+  emit_python_program | python3 - "$mode" "$root" "$RUNTIME_USER" "$RUNTIME_HOME" "$OPENCLAW_BIN" "$GATEWAY_PORT"
 }
 
 run_remote_script() {
   local host="$1"
   local remote_command="$2"
-
   local tmp_name
   tmp_name="$(basename "$0")"
   ssh "$host" "tmp=\$(mktemp /tmp/${tmp_name}.XXXXXX); cat >\"\$tmp\"; chmod +x \"\$tmp\"; ${remote_command}; status=\$?; rm -f \"\$tmp\"; exit \$status" < "$0"
 }
 
+remote_local_args() {
+  printf '%q ' --runtime-user "$RUNTIME_USER" --runtime-home "$RUNTIME_HOME" --openclaw-bin "$OPENCLAW_BIN" --gateway-port "$GATEWAY_PORT"
+}
+
 run_remote_mode() {
   local mode="$1"
   local host="$2"
-
+  local args uid_cmd user_systemctl
+  args="$(remote_local_args)"
+  uid_cmd="uid=\$(id -u $(printf '%q' "$RUNTIME_USER"))"
+  user_systemctl="sudo -u $(printf '%q' "$RUNTIME_USER") -H env XDG_RUNTIME_DIR=/run/user/\$uid systemctl --user"
   case "$mode" in
     dry-run)
-      run_remote_script "$host" "\"\$tmp\" --dry-run-local --root /"
+      run_remote_script "$host" "\"\$tmp\" --dry-run-local --root / ${args}"
       ;;
     apply)
-      run_remote_script "$host" "sudo loginctl enable-linger chip; systemctl --user disable --now openclaw-gateway >/dev/null 2>&1 || true; sudo systemctl disable --now openclaw-gateway >/dev/null 2>&1 || true; sudo \"\$tmp\" --apply-local --root /; sudo chown chip:chip /home/chip/.openclaw/.env >/dev/null 2>&1 || true; sudo chmod 600 /home/chip/.openclaw/.env >/dev/null 2>&1 || true; sudo chown -R chip:chip /home/chip/.config/systemd >/dev/null 2>&1 || true; if sudo test -d /root/.openclaw; then sudo mv /root/.openclaw /root/.openclaw.server-doctor-disabled.\$(date +%Y%m%d-%H%M%S); fi; sudo systemctl daemon-reload; sudo -u chip -H env HOME=/home/chip PATH=/home/chip/.npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /home/chip/.npm-global/bin/openclaw gateway install --force --port 8090; systemctl --user daemon-reload; systemctl --user enable --now openclaw-gateway; sudo \"\$tmp\" --validate-local --root /; systemctl --user status openclaw-gateway --no-pager -l || true; sudo ss -tulpn | grep -E '127.0.0.1:(8090|18789|18791)' || true"
+      run_remote_script "$host" "sudo loginctl enable-linger $(printf '%q' "$RUNTIME_USER"); sudo \"\$tmp\" --apply-local --root / ${args}; sudo chown -R $(printf '%q' "$RUNTIME_USER:") $(printf '%q' "$RUNTIME_HOME/.openclaw") $(printf '%q' "$RUNTIME_HOME/.config/systemd") 2>/dev/null || true; sudo systemctl disable --now openclaw-gateway >/dev/null 2>&1 || true; ${uid_cmd}; ${user_systemctl} daemon-reload; ${user_systemctl} enable openclaw-gateway; ${user_systemctl} restart openclaw-gateway; sudo \"\$tmp\" --validate-local --root / ${args}; ${user_systemctl} status openclaw-gateway --no-pager -l"
       ;;
     validate)
-      run_remote_script "$host" "\"\$tmp\" --validate-local --root /; systemctl --user status openclaw-gateway --no-pager -l >/dev/null 2>&1 || true; sudo systemctl status openclaw-gateway --no-pager -l >/dev/null 2>&1 || true; sudo ss -tulpn | grep -E '127.0.0.1:(8090|18789|18791)' || true"
+      run_remote_script "$host" "sudo \"\$tmp\" --validate-local --root / ${args}; ${uid_cmd}; ${user_systemctl} status openclaw-gateway --no-pager -l"
       ;;
     *)
       die "unsupported remote mode: $mode"
@@ -303,79 +306,79 @@ run_remote_mode() {
   esac
 }
 
-main() {
-  local mode=""
-  local host=""
-  local root=""
+mode=""
+host=""
+root=""
+RUNTIME_USER="${OPENCLAW_RUNTIME_USER:-}"
+RUNTIME_HOME=""
+OPENCLAW_BIN=""
+GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-8090}"
 
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --dry-run)
-        mode="dry-run"
-        shift
-        ;;
-      --apply)
-        mode="apply"
-        shift
-        ;;
-      --validate)
-        mode="validate"
-        shift
-        ;;
-      --dry-run-local)
-        mode="dry-run-local"
-        shift
-        ;;
-      --apply-local)
-        mode="apply-local"
-        shift
-        ;;
-      --validate-local)
-        mode="validate-local"
-        shift
-        ;;
-      --host)
-        [[ $# -ge 2 ]] || die "--host requires a value"
-        host="$2"
-        shift 2
-        ;;
-      --root)
-        [[ $# -ge 2 ]] || die "--root requires a value"
-        root="$2"
-        shift 2
-        ;;
-      -h|--help)
-        usage
-        exit 0
-        ;;
-      *)
-        die "unknown argument: $1"
-        ;;
-    esac
-  done
-
-  case "$mode" in
-    dry-run|apply|validate)
-      [[ -n "$host" ]] || die "--host is required for remote modes"
-      run_remote_mode "$mode" "$host"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run|--apply|--validate|--dry-run-local|--apply-local|--validate-local)
+      [[ -z "$mode" ]] || die "only one mode may be specified"
+      mode="$1"
+      shift
       ;;
-    dry-run-local)
-      [[ -n "$root" ]] || die "--root is required for local modes"
-      run_local_mode "dry-run" "$root"
+    --host)
+      [[ $# -ge 2 ]] || die "--host requires a value"
+      host="$2"
+      shift 2
       ;;
-    apply-local)
-      [[ -n "$root" ]] || die "--root is required for local modes"
-      run_local_mode "apply" "$root"
+    --root)
+      [[ $# -ge 2 ]] || die "--root requires a value"
+      root="$2"
+      shift 2
       ;;
-    validate-local)
-      [[ -n "$root" ]] || die "--root is required for local modes"
-      run_local_mode "validate" "$root"
+    --runtime-user)
+      [[ $# -ge 2 ]] || die "--runtime-user requires a value"
+      RUNTIME_USER="$2"
+      shift 2
+      ;;
+    --runtime-home)
+      [[ $# -ge 2 ]] || die "--runtime-home requires a value"
+      RUNTIME_HOME="$2"
+      shift 2
+      ;;
+    --openclaw-bin)
+      [[ $# -ge 2 ]] || die "--openclaw-bin requires a value"
+      OPENCLAW_BIN="$2"
+      shift 2
+      ;;
+    --gateway-port)
+      [[ $# -ge 2 ]] || die "--gateway-port requires a value"
+      GATEWAY_PORT="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
       ;;
     *)
-      usage >&2
-      exit 1
+      die "unknown argument: $1"
       ;;
   esac
-}
+done
 
-main "$@"
+[[ -n "$RUNTIME_USER" ]] || die "--runtime-user is required"
+RUNTIME_HOME="${RUNTIME_HOME:-/home/$RUNTIME_USER}"
+OPENCLAW_BIN="${OPENCLAW_BIN:-$RUNTIME_HOME/.npm-global/bin/openclaw}"
+validate_inputs
+
+case "$mode" in
+  --dry-run|--apply|--validate)
+    [[ -n "$host" ]] || die "--host is required for remote modes"
+    [[ "$host" != -* && "$host" != *$'\n'* && "$host" != *$'\r'* ]] || die "invalid --host"
+    run_remote_mode "${mode#--}" "$host"
+    ;;
+  --dry-run-local|--apply-local|--validate-local)
+    [[ -n "$root" ]] || die "--root is required for local modes"
+    local_mode="${mode#--}"
+    run_local_mode "${local_mode%-local}" "$root"
+    ;;
+  *)
+    usage >&2
+    exit 1
+    ;;
+esac

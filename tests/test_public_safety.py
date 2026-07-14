@@ -46,6 +46,17 @@ class PublicSafetyScannerTests(unittest.TestCase):
         self.assertIn("blocked by telegram-chat-id", proc.stdout)
         self.assertIn("blocked by absolute-user-home", proc.stdout)
 
+    def test_tracked_authored_tree_passes(self) -> None:
+        proc = subprocess.run(
+            ["python3", str(SCRIPT), "--authored"],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("authored tree", proc.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

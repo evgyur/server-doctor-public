@@ -5,4 +5,7 @@ __pycache__/
 !.env.example
 evidence/
 backups/
+*.bak
+*.backup
 *.log
+.shaw/

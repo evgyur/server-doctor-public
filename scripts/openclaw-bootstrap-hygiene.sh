@@ -4,9 +4,9 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  openclaw-bootstrap-hygiene.sh --dry-run --host <ssh-host> [--workspace-root <path>]
-  openclaw-bootstrap-hygiene.sh --apply --host <ssh-host> [--workspace-root <path>]
-  openclaw-bootstrap-hygiene.sh --validate --host <ssh-host> [--workspace-root <path>]
+  openclaw-bootstrap-hygiene.sh --dry-run --host <ssh-host> --workspace-root <path>
+  openclaw-bootstrap-hygiene.sh --apply --host <ssh-host> --workspace-root <path>
+  openclaw-bootstrap-hygiene.sh --validate --host <ssh-host> --workspace-root <path>
   openclaw-bootstrap-hygiene.sh --dry-run-local --root <workspace-root>
   openclaw-bootstrap-hygiene.sh --apply-local --root <workspace-root>
   openclaw-bootstrap-hygiene.sh --validate-local --root <workspace-root>
@@ -74,7 +74,7 @@ OPERATOR_AGENTS_CANONICAL = """# AGENTS.md - Workspace Bootstrap
 - For chat delivery from a normal assistant reply, do not use `MEDIA:/absolute/path/...`.
 - Use a safe relative workspace path like `MEDIA:./out/file.pdf` for supported media/safe document types, or use the message tool/filePath path when available.
 - Do not claim that chat attachment delivery is impossible when a local file already exists.
-- For Telegram media tied to an attachment or reply, use `scripts/telegram_media_recover.py` before claiming the media is missing.
+- For media tied to an attachment or reply, use the platform's supported attachment-recovery path before claiming the media is missing.
 
 ## Runtime and Ops
 
@@ -85,15 +85,12 @@ OPERATOR_AGENTS_CANONICAL = """# AGENTS.md - Workspace Bootstrap
 
 OPERATOR_TOOLS_CANONICAL = """# TOOLS.md - Workspace Tool Index
 
-- Use /opt/clawd-workspace/SKILLS.md for the skill command index.
 - Skills own their tools; read the matching `SKILL.md` before using a skill-managed tool.
-- `telegram-chip` API base: `http://127.0.0.1:8080` (`/health` before Telegram operations).
-- Browser relay status: `http://127.0.0.1:18800/json/version`
-- Browser relay tabs: `http://127.0.0.1:18800/json/list`
-- Google Workspace quick check: `/opt/clawd-workspace/scripts/gog-check.sh`
-- Telegram media recovery helper: `/opt/clawd-workspace/scripts/telegram_media_recover.py`
-- Chat attachments from OpenClaw final replies: prefer `MEDIA:./relative/path/to/file.pdf` or another safe relative workspace path for supported media/safe document types; avoid `MEDIA:/absolute/path/...` in normal replies.
-- Keep secrets, SSH fallbacks, incident runbooks, and workflow doctrine out of this file.
+- Keep environment-specific endpoints, SSH aliases, and helper paths in a local private overlay.
+- Health-check a dependency before using it; do not treat process presence as service readiness.
+- For chat attachments, prefer `MEDIA:./relative/path/to/file.pdf` or another safe relative workspace path supported by the runtime.
+- Avoid absolute `MEDIA:` paths in normal replies.
+- Keep secrets, credentials, private topology, and incident payloads out of this file.
 """
 
 AGENT_WORKSPACE_AGENTS_CANONICAL = """# AGENTS.md - Your Workspace
@@ -201,7 +198,7 @@ Things like:
 
 ### SSH
 
-- home-server -> 192.168.1.100, user: admin
+- home-server -> 192.0.2.10, user: admin
 
 ### TTS
 
@@ -232,26 +229,25 @@ COMMON_AGENTS_FORBIDDEN = [
     "Recurring Tasks",
     "Slash-команды для workflow",
     "Gateway Restart Pre-flight Check",
-    "EVGYUR.PRO Scope Guard",
     "workflow-circuit-breakers.md",
-    "TELEGRAM-CHIP POLICY (LOCAL ONLY)",
+    "LOCAL CHAT ROUTE POLICY",
     "BROWSER POLICY (MANDATORY)",
     "Goal-Driven Autonomous Tasks",
     "SKILLS Yellow Pages",
 ]
 
 COMMON_TOOLS_FORBIDDEN = [
-    "Mac mini (chip) — SSH / Runtime",
+    "Host-specific SSH / Runtime",
     "Пароль fallback",
     "SKILLS Yellow Pages",
     "Telegram Attachment SOP",
     "Telethon Policy",
     "Workflow Enforcement Tools",
     "workflow-circuit-breakers.md",
-    "Human20 Video Pipeline",
+    "Project-specific Video Pipeline",
     "Promise Tracker",
     "BRAIN.md State Manager",
-    "TELEGRAM-CHIP POLICY (LOCAL ONLY)",
+    "LOCAL CHAT ROUTE POLICY",
     "Workflow Enforcement Tools",
 ]
 
@@ -451,18 +447,6 @@ run_remote_mode() {
   emit_python_program | ssh "$host" "$remote_cmd"
 }
 
-default_workspace_roots_for_host() {
-  local host="$1"
-  case "$host" in
-    mac-mini-claw|mac-mini-claw.tail2b1f86.ts.net|claw@100.119.134.8|claw@mac-mini-claw|claw@mac-mini-claw.tail2b1f86.ts.net)
-      printf '%s\n' "/opt/clawd-workspace" "/Users/claw/.openclaw/workspace"
-      ;;
-    *)
-      printf '%s\n' "/opt/clawd-workspace"
-      ;;
-  esac
-}
-
 main() {
   local mode=""
   local host=""
@@ -520,10 +504,9 @@ main() {
   [[ -n "$mode" ]] || die "missing mode"
 
   if [[ -n "$host" ]]; then
+    [[ "$host" != -* && "$host" != *$'\n'* && "$host" != *$'\r'* ]] || die "invalid --host"
     [[ ${#roots[@]} -eq 0 ]] || die "--root is only valid with local modes"
-    if [[ ${#workspace_roots[@]} -eq 0 ]]; then
-      mapfile -t workspace_roots < <(default_workspace_roots_for_host "$host")
-    fi
+    [[ ${#workspace_roots[@]} -gt 0 ]] || die "remote modes require at least one explicit --workspace-root"
     run_remote_mode "$mode" "$host" "${workspace_roots[@]}"
     exit 0
   fi
