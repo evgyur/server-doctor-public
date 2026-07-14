@@ -42,7 +42,21 @@ from tempfile import NamedTemporaryFile
 
 
 MODE = sys.argv[1]
-ROOTS = [Path(arg).expanduser() for arg in sys.argv[2:]]
+
+
+def unique_roots(values: list[str]) -> list[Path]:
+    roots: list[Path] = []
+    seen: set[Path] = set()
+    for value in values:
+        root = Path(value).expanduser().resolve(strict=False)
+        if root in seen:
+            continue
+        seen.add(root)
+        roots.append(root)
+    return roots
+
+
+ROOTS = unique_roots(sys.argv[2:])
 
 OPERATOR_AGENTS_CANONICAL = """# AGENTS.md - Workspace Bootstrap
 
@@ -373,9 +387,9 @@ def apply_root_rewrite(report: dict) -> dict:
         report["updatedFiles"] = []
         return report
 
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
     backup_dir = root / "backups" / f"openclaw-bootstrap-hygiene-{timestamp}"
-    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_dir.mkdir(parents=True, exist_ok=False)
 
     updated_files: list[str] = []
     for name, content, needs_rewrite in (
@@ -444,6 +458,8 @@ run_remote_mode() {
     printf -v remote_cmd '%s %q' "$remote_cmd" "$arg"
   done
 
+  # The command is deliberately assembled and shell-quoted on the client.
+  # shellcheck disable=SC2029
   emit_python_program | ssh "$host" "$remote_cmd"
 }
 
