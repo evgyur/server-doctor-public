@@ -27,30 +27,15 @@ sudo augenrules --load
 
 Keep the rule set narrow. A small, relevant watch list is far more useful than a noisy everything-watch.
 
-### 2. `sudo` input/output logging
+### 2. Privileged-session logging
 
-If the environment allows it, capture privileged shell history with sudo I/O logs:
-
-```bash
-sudo tee /etc/sudoers.d/99-sudo-io-logging >/dev/null <<'EOF'
-Defaults log_output
-Defaults log_input
-Defaults iolog_dir="/var/log/sudo-io"
-Defaults logfile="/var/log/sudo.log"
-Defaults timestamp_type=global
-EOF
-sudo chmod 440 /etc/sudoers.d/99-sudo-io-logging
-sudo visudo -cf /etc/sudoers.d/99-sudo-io-logging
-sudo mkdir -p /var/log/sudo-io
-sudo touch /var/log/sudo.log
-```
+If policy requires privileged-session recording, configure it through the operating system's approved security baseline or configuration-management layer. Do not create or replace privilege-policy fragments from an ad-hoc incident session.
 
 ## Verification
 
 ```bash
 systemctl is-active auditd
 sudo auditctl -l | grep -E 'project_changes|project_pkg|project_runtime|operator_exec'
-sudo visudo -cf /etc/sudoers.d/99-sudo-io-logging
 ```
 
 ## Incident queries
@@ -60,8 +45,6 @@ sudo ausearch -k project_changes -i
 sudo ausearch -k project_pkg -i
 sudo ausearch -k project_runtime -i
 sudo ausearch -k operator_exec -i
-sudo less /var/log/sudo.log
-sudo ls -la /var/log/sudo-io
 ```
 
 ## Notes

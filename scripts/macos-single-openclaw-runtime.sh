@@ -63,13 +63,12 @@ Dry-run plan:
   export PATH="${CANONICAL_PATH}:\$PATH"
   which -a openclaw || true
   ${CANONICAL_NODE} ${CANONICAL_ENTRY} --version
-  launchctl print gui/\$(id -u)/${GATEWAY_LABEL} 2>/dev/null | egrep 'program =|path =|args ='
+  launchctl print gui/\$(id -u)/${GATEWAY_LABEL} 2>/dev/null | grep -E 'program =|path =|args ='
   cp ${plist_path} ${plist_path}.bak.\$(date +%Y%m%d-%H%M%S)
   PATH="${CANONICAL_PATH}" ${CANONICAL_OPENCLAW} gateway install --force --port ${GATEWAY_PORT}
   PATH="${CANONICAL_PATH}" ${CANONICAL_OPENCLAW} gateway restart
   <nvm npm> npm uninstall -g openclaw
-  rm -f ~/.nvm/versions/node/*/bin/openclaw
-  rm -rf ~/.nvm/versions/node/*/lib/node_modules/openclaw
+  move any leftover nvm launcher/package into ~/.server-doctor/quarantine/<timestamp>/
   PATH="${CANONICAL_PATH}" ${CANONICAL_OPENCLAW} gateway status
 EOF
 }
@@ -94,6 +93,8 @@ apply_fix() {
 
   local timestamp
   timestamp="$(date +%Y%m%d-%H%M%S)"
+  local quarantine_root
+  quarantine_root="$HOME/.server-doctor/quarantine/$timestamp"
   local plist_path
   plist_path="$(gateway_plist)"
 
@@ -103,10 +104,12 @@ apply_fix() {
   which -a openclaw || true
   "$CANONICAL_NODE" "$CANONICAL_ENTRY" --version
 
+  local nvm_node
   local -a nvm_nodes=()
-  mapfile -t nvm_nodes < <(list_nvm_nodes || true)
+  while IFS= read -r nvm_node; do
+    [[ -n "$nvm_node" ]] && nvm_nodes+=("$nvm_node")
+  done < <(list_nvm_nodes || true)
   if (( ${#nvm_nodes[@]} > 0 )); then
-    local nvm_node
     for nvm_node in "${nvm_nodes[@]}"; do
       local nvm_root
       nvm_root="$(cd "$(dirname "$nvm_node")/.." && pwd)"
@@ -138,20 +141,31 @@ apply_fix() {
       if [[ -x "$nvm_npm" ]]; then
         "$nvm_npm" uninstall -g openclaw || true
       fi
-      rm -f "$nvm_root/bin/openclaw"
-      rm -rf "$nvm_root/lib/node_modules/openclaw"
+      local quarantine_dir
+      quarantine_dir="$quarantine_root/$(basename "$nvm_root")"
+      if [[ -e "$nvm_root/bin/openclaw" || -L "$nvm_root/bin/openclaw" || -d "$nvm_root/lib/node_modules/openclaw" ]]; then
+        mkdir -p "$quarantine_dir"
+      fi
+      if [[ -e "$nvm_root/bin/openclaw" || -L "$nvm_root/bin/openclaw" ]]; then
+        mv "$nvm_root/bin/openclaw" "$quarantine_dir/openclaw-bin"
+      fi
+      if [[ -d "$nvm_root/lib/node_modules/openclaw" ]]; then
+        mv "$nvm_root/lib/node_modules/openclaw" "$quarantine_dir/openclaw-package"
+      fi
     done
   fi
 
   echo "== Verify final state =="
   which -a openclaw || true
   PATH="$CANONICAL_PATH" "$CANONICAL_OPENCLAW" gateway status
-  launchctl print "gui/$(id -u)/${GATEWAY_LABEL}" 2>/dev/null | egrep 'program =|path =|args ='
+  launchctl print "gui/$(id -u)/${GATEWAY_LABEL}" 2>/dev/null | grep -E 'program =|path =|args ='
 
+  local remaining_nvm_node
   local -a remaining_nvm_nodes=()
-  mapfile -t remaining_nvm_nodes < <(list_nvm_nodes || true)
+  while IFS= read -r remaining_nvm_node; do
+    [[ -n "$remaining_nvm_node" ]] && remaining_nvm_nodes+=("$remaining_nvm_node")
+  done < <(list_nvm_nodes || true)
   if (( ${#remaining_nvm_nodes[@]} > 0 )); then
-    local remaining_nvm_node
     for remaining_nvm_node in "${remaining_nvm_nodes[@]}"; do
       echo "nvm OpenClaw copy still present after remediation: ${remaining_nvm_node%/bin/node}" >&2
     done

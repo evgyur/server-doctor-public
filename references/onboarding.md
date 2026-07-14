@@ -30,20 +30,21 @@ Acceptance:
 - current auth path is verified
 - no blind changes happen before a baseline snapshot
 
-## Stage 2: User Bootstrap And SSH Hardening
+## Stage 2: Operator access and SSH hardening
 
 Actions:
 
-- create the operator user with sudo when appropriate
-- add `~/.ssh/authorized_keys`
-- disable `PermitRootLogin` and `PasswordAuthentication` after verifying the new login
+- configure operator access through the environment's approved identity process
+- verify a second independent session before changing authentication policy
+- disable root and password login only after the replacement access path is proven
+- keep identity-file provisioning outside this skill and out of the repository
 
 Verification:
 
 ```bash
 sudo sshd -t
-sudo systemctl restart ssh || sudo systemctl restart sshd
 sudo grep -E '^(PermitRootLogin|PasswordAuthentication)' /etc/ssh/sshd_config
+ssh <operator>@<host> 'id && true'
 ```
 
 Socket-activation trap:
@@ -62,7 +63,7 @@ If socket activation conflicts with the intended listener policy, migrate delibe
 
 Acceptance:
 
-- the new user can login by key
+- the new operator can log in through the approved identity path
 - root SSH and password SSH are disabled
 - the intended socket/service owns the listener and a second operator session works
 

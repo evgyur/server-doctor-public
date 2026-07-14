@@ -6,10 +6,11 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 PRIVATE_HINTS = [
-    r'/(?:home|Users)/(?!<[^/]+>|\$\{?\w+\}?/)[^/\s`"\']+/',
+    r'/(?:home|Users)/[^/<$][^/]*/',
+    r'/(?:opt|srv)/[A-Za-z0-9._-]{3,}/',
     r'(?<!\d)-100\d{7,}(?!\d)',
-    r'\b[A-Z0-9._%+-]+@(?!example\.(?:com|org|net)\b)[A-Z0-9.-]+\.[A-Z]{2,}\b',
-    r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----',
+    r'\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b',
+    r'\b\d{1,3}(?:\.\d{1,3}){3}\b'
 ]
 DOCTRINE_HINTS = [
     r'\bevidence\b', r'\boutage\b', r'\brecovery\b', r'\baudit\b', r'\brouting\b', r'\bdoctrine\b'

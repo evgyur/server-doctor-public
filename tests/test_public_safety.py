@@ -37,7 +37,7 @@ class PublicSafetyScannerTests(unittest.TestCase):
 
     def test_clean_placeholders_pass(self) -> None:
         proc = self.run_scan(
-            "Host: <host>\nUser: <runtime-user>\nToken: <redacted>\n"
+            "Host: <host>\nUser: <runtime-user>\nHome: `/home/<runtime-user>`\nToken: <redacted>\n"
             "Health: http://127.0.0.1:<port>/health\n"
         )
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
@@ -59,21 +59,6 @@ class PublicSafetyScannerTests(unittest.TestCase):
         self.assertIn("blocked by telegram-chat-id", proc.stdout)
         self.assertIn("blocked by absolute-user-home", proc.stdout)
 
-    def test_compound_private_identity_and_owner_outside_public_url_fail(self) -> None:
-        lane = "ch" + "ip" + "digest"
-        owner = "ev" + "gyur"
-        proc = self.run_scan(f"Lane: {lane}\nOperator: {owner}\n")
-        self.assertNotEqual(proc.returncode, 0)
-        self.assertIn("blocked by private-marker", proc.stdout)
-        self.assertIn("blocked by public-owner-outside-repo-url", proc.stdout)
-        self.assertNotIn(lane, proc.stdout)
-        self.assertNotIn(owner, proc.stdout)
-
-    def test_public_owner_is_allowed_only_in_canonical_repo_url(self) -> None:
-        owner = "ev" + "gyur"
-        url = f"https://github.com/{owner}/server-doctor-public"
-        proc = self.run_scan(f"Clone: {url}\n")
-        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
 
     def test_every_ipv4_match_is_checked(self) -> None:
         private_ip = "10." + "23.45.67"
@@ -89,12 +74,12 @@ class PublicSafetyScannerTests(unittest.TestCase):
         self.assertNotEqual(proc.returncode, 0)
         self.assertGreaterEqual(proc.stdout.count("blocked by absolute-user-home"), 2)
 
-    def test_sensitive_identity_in_tracked_path_shape_fails(self) -> None:
-        lane = "ch" + "ip" + "digest"
-        proc = self.run_scan("portable content\n", filename=f"{lane}.md")
+    def test_sensitive_email_in_tracked_path_shape_fails(self) -> None:
+        sensitive_name = "owner" + "@" + "private.invalid.md"
+        proc = self.run_scan("portable content\n", filename=sensitive_name)
         self.assertNotEqual(proc.returncode, 0)
-        self.assertIn("blocked by tracked-path-private-marker", proc.stdout)
-        self.assertNotIn(lane, proc.stdout)
+        self.assertIn("blocked by tracked-path-email-address", proc.stdout)
+        self.assertNotIn(sensitive_name, proc.stdout)
 
     def test_non_utf8_input_fails_closed(self) -> None:
         proc = self.run_scan_bytes(b"\xff\xfe\x00")
@@ -137,8 +122,8 @@ class PublicSafetyScannerTests(unittest.TestCase):
             source.write_text("portable content\n", encoding="utf-8")
             subprocess.run(["git", "add", "portable.md"], cwd=repo, check=True)
             subprocess.run(["git", "commit", "-qm", "base"], cwd=repo, check=True)
-            lane = "ch" + "ip" + "digest"
-            subprocess.run(["git", "mv", "portable.md", f"{lane}.md"], cwd=repo, check=True)
+            sensitive_name = "owner" + "@" + "private.invalid.md"
+            subprocess.run(["git", "mv", "portable.md", sensitive_name], cwd=repo, check=True)
             proc = subprocess.run(
                 ["python3", str(scanner), "--staged"],
                 cwd=repo,
@@ -147,13 +132,13 @@ class PublicSafetyScannerTests(unittest.TestCase):
                 check=False,
             )
         self.assertNotEqual(proc.returncode, 0)
-        self.assertIn("blocked by tracked-path-private-marker", proc.stdout)
-        self.assertNotIn(lane, proc.stdout)
+        self.assertIn("blocked by tracked-path-email-address", proc.stdout)
+        self.assertNotIn(sensitive_name, proc.stdout)
 
     def test_sensitive_non_utf8_path_is_suppressed_for_every_finding(self) -> None:
-        lane = "ch" + "ip" + "secret"
+        sensitive_name = "owner" + "@" + "private.invalid.bin"
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / f"{lane}.bin"
+            path = Path(tmp) / sensitive_name
             path.write_bytes(b"\xff\xfe\x00")
             proc = subprocess.run(
                 ["python3", str(SCRIPT), "--paths", str(path)],
@@ -163,9 +148,9 @@ class PublicSafetyScannerTests(unittest.TestCase):
                 check=False,
             )
         self.assertNotEqual(proc.returncode, 0)
-        self.assertIn("blocked by tracked-path-private-marker", proc.stdout)
+        self.assertIn("blocked by tracked-path-email-address", proc.stdout)
         self.assertIn("blocked by unreadable-or-non-utf8-file", proc.stdout)
-        self.assertNotIn(lane, proc.stdout)
+        self.assertNotIn(sensitive_name, proc.stdout)
 
     def test_tracked_authored_tree_passes(self) -> None:
         proc = subprocess.run(

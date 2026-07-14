@@ -33,10 +33,10 @@ EOF
 chmod +x "$fake_bin/ssh"
 
 PATH="$fake_bin:$PATH" \
-  "$helper" check example-host "$tmpdir/out" > "$tmpdir/run.log"
+  bash "$helper" check example.invalid "$tmpdir/out" > "$tmpdir/run.log"
 
-json_report="$(find "$tmpdir/out" -name 'server-doctor-example-host-*.json' | head -1)"
-md_report="$(find "$tmpdir/out" -name 'server-doctor-example-host-*.md' | head -1)"
+json_report="$(find "$tmpdir/out" -name 'server-doctor-example.invalid-*.json' | head -1)"
+md_report="$(find "$tmpdir/out" -name 'server-doctor-example.invalid-*.md' | head -1)"
 
 test -n "$json_report"
 test -n "$md_report"
@@ -49,7 +49,7 @@ from pathlib import Path
 report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 markdown = Path(sys.argv[2]).read_text(encoding="utf-8")
 
-assert report["host"] == "example-host", report
+assert report["host"] == "example.invalid", report
 assert report["summary"] == {"pass": 8, "warn": 4, "fail": 0}, report
 ssh_entry = next(item for item in report["checks"] if item["check"] == "ssh_hardening")
 assert ssh_entry["status"] == "warn", ssh_entry
@@ -59,5 +59,11 @@ assert "# Server Doctor Report" in markdown, markdown
 assert "`ssh_hardening`" in markdown, markdown
 assert "**83/100**" in markdown, markdown
 PY
+
+if PATH="$fake_bin:$PATH" bash "$helper" fix example.invalid "$tmpdir/out" >"$tmpdir/fix.log" 2>&1; then
+  echo "fix mode must be rejected" >&2
+  exit 1
+fi
+grep -q 'Usage:' "$tmpdir/fix.log"
 
 echo "ok"

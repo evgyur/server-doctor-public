@@ -4,7 +4,6 @@ set -euo pipefail
 # Server Doctor MVP
 # Modes:
 #   check    <host> [output_dir]
-#   fix      <host> [output_dir]        # safe auto-fix: ssh baseline, firewall baseline, fail2ban
 #   preflight <host> [output_dir]       # warn-only gate based on check results
 
 mode="${1:-}"
@@ -15,7 +14,6 @@ usage() {
   cat <<USAGE
 Usage:
   $0 check <host-alias-or-user@ip> [output_dir]
-  $0 fix <host-alias-or-user@ip> [output_dir]
   $0 preflight <host-alias-or-user@ip> [output_dir]
 USAGE
 }
@@ -25,7 +23,7 @@ if [[ -z "$mode" || -z "$host" ]]; then
   exit 1
 fi
 
-if [[ "$mode" != "check" && "$mode" != "fix" && "$mode" != "preflight" ]]; then
+if [[ "$mode" != "check" && "$mode" != "preflight" ]]; then
   usage
   exit 1
 fi
@@ -191,115 +189,6 @@ fi
 REMOTE
 }
 
-run_remote_fix() {
-  local actions_file="$1"
-  "${ssh_cmd[@]}" <<'REMOTE' > "$actions_file"
-set -euo pipefail
-
-log(){ printf "%s|%s|%s\n" "$1" "$2" "$3"; }
-
-if [[ "$(id -u)" -eq 0 ]]; then
-  SUDO=""
-else
-  SUDO="sudo"
-fi
-
-pkg_install() {
-  if command -v apt-get >/dev/null 2>&1; then
-    $SUDO apt-get update -y >/dev/null 2>&1 || true
-    DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y "$@" >/dev/null 2>&1 || return 1
-    return 0
-  elif command -v dnf >/dev/null 2>&1; then
-    $SUDO dnf install -y "$@" >/dev/null 2>&1 || return 1
-    return 0
-  elif command -v yum >/dev/null 2>&1; then
-    $SUDO yum install -y "$@" >/dev/null 2>&1 || return 1
-    return 0
-  fi
-  return 1
-}
-
-ensure_sshd_setting() {
-  local key="$1" value="$2" cfg="$3"
-  if grep -Eq "^\s*${key}\s+" "$cfg"; then
-    $SUDO sed -i -E "s#^\s*${key}\s+.*#${key} ${value}#" "$cfg"
-  else
-    echo "${key} ${value}" | $SUDO tee -a "$cfg" >/dev/null
-  fi
-}
-
-# 1) SSH hardening (safe)
-cfg="/etc/ssh/sshd_config"
-can_harden=0
-root_home="$(getent passwd root 2>/dev/null | cut -d: -f6)"
-if [[ -s "$HOME/.ssh/authorized_keys" || ( -n "$root_home" && -s "$root_home/.ssh/authorized_keys" ) ]]; then
-  can_harden=1
-fi
-if [[ -n "${SUDO_USER:-}" && -s "/home/${SUDO_USER}/.ssh/authorized_keys" ]]; then
-  can_harden=1
-fi
-
-if [[ -f "$cfg" && "$can_harden" -eq 1 ]]; then
-  backup="${cfg}.server-doctor.$(date +%s).bak"
-  $SUDO cp -a "$cfg" "$backup"
-  ensure_sshd_setting "PermitRootLogin" "no" "$cfg"
-  ensure_sshd_setting "PasswordAuthentication" "no" "$cfg"
-  ensure_sshd_setting "PubkeyAuthentication" "yes" "$cfg"
-  if $SUDO sshd -t 2>/dev/null; then
-    $SUDO systemctl restart ssh 2>/dev/null || $SUDO systemctl restart sshd 2>/dev/null || true
-    log ssh_hardening pass "applied, backup=$backup"
-  else
-    $SUDO cp -a "$backup" "$cfg"
-    log ssh_hardening fail "sshd config invalid, rolled back from backup"
-  fi
-elif [[ ! -f "$cfg" ]]; then
-  log ssh_hardening warn "skipped: no sshd_config"
-else
-  log ssh_hardening warn "skipped: no authorized_keys evidence"
-fi
-
-# 2) Firewall baseline
-if command -v ufw >/dev/null 2>&1; then
-  $SUDO ufw default deny incoming >/dev/null 2>&1 || true
-  $SUDO ufw default allow outgoing >/dev/null 2>&1 || true
-  $SUDO ufw allow OpenSSH >/dev/null 2>&1 || $SUDO ufw allow 22/tcp >/dev/null 2>&1 || true
-  $SUDO ufw allow 80/tcp >/dev/null 2>&1 || true
-  $SUDO ufw allow 443/tcp >/dev/null 2>&1 || true
-  yes | $SUDO ufw enable >/dev/null 2>&1 || true
-  log firewall pass "ufw baseline applied"
-elif command -v firewall-cmd >/dev/null 2>&1; then
-  $SUDO systemctl enable --now firewalld >/dev/null 2>&1 || true
-  $SUDO firewall-cmd --permanent --add-service=ssh >/dev/null 2>&1 || true
-  $SUDO firewall-cmd --permanent --add-service=http >/dev/null 2>&1 || true
-  $SUDO firewall-cmd --permanent --add-service=https >/dev/null 2>&1 || true
-  $SUDO firewall-cmd --reload >/dev/null 2>&1 || true
-  log firewall pass "firewalld baseline applied"
-else
-  log firewall warn "skipped: ufw/firewalld missing"
-fi
-
-# 3) fail2ban enable
-if ! command -v fail2ban-client >/dev/null 2>&1; then
-  if pkg_install fail2ban; then
-    log fail2ban pass "installed"
-  else
-    log fail2ban warn "install failed"
-  fi
-fi
-
-if command -v fail2ban-client >/dev/null 2>&1; then
-  $SUDO systemctl enable --now fail2ban >/dev/null 2>&1 || true
-  if $SUDO systemctl is-active --quiet fail2ban; then
-    log fail2ban pass "enabled+active"
-  else
-    log fail2ban warn "installed but inactive"
-  fi
-else
-  log fail2ban warn "not available"
-fi
-REMOTE
-}
-
 build_check_reports() {
   local raw_path="$1"
   local json_path="$2"
@@ -357,62 +246,6 @@ print(md_path)
 PY
 }
 
-build_fix_reports() {
-  local before_json="$1"
-  local after_json="$2"
-  local actions_raw="$3"
-  local out_json="$4"
-  local out_md="$5"
-  python3 - "$before_json" "$after_json" "$actions_raw" "$out_json" "$out_md" <<'PY'
-import datetime
-import json
-import sys
-
-before_path, after_path, actions_path, out_json, out_md = sys.argv[1:6]
-before = json.load(open(before_path, "r", encoding="utf-8"))
-after = json.load(open(after_path, "r", encoding="utf-8"))
-actions = []
-with open(actions_path, "r", encoding="utf-8") as handle:
-    for line in handle:
-        line = line.strip()
-        if not line or "|" not in line:
-            continue
-        action, status, detail = line.split("|", 2)
-        actions.append({"action": action, "status": status, "detail": detail})
-
-report = {
-    "host": before.get("host"),
-    "generatedAt": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z"),
-    "mode": "fix",
-    "beforeHealth": before.get("healthScore"),
-    "afterHealth": after.get("healthScore"),
-    "deltaHealth": after.get("healthScore", 0) - before.get("healthScore", 0),
-    "actions": actions,
-    "before": before,
-    "after": after,
-}
-json.dump(report, open(out_json, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-
-with open(out_md, "w", encoding="utf-8") as handle:
-    handle.write("# Server Doctor Fix Report\n\n")
-    handle.write(f"- Host: `{report['host']}`\n")
-    handle.write(f"- Generated: `{report['generatedAt']}`\n")
-    handle.write(f"- Health: **{report['beforeHealth']} -> {report['afterHealth']}** (delta {report['deltaHealth']:+d})\n\n")
-    handle.write("## Applied actions\n")
-    for action in actions:
-        emoji = {"pass": "PASS", "warn": "WARN", "fail": "FAIL"}.get(action["status"], "INFO")
-        handle.write(f"- {emoji} `{action['action']}` - {action['detail']}\n")
-    handle.write("\n## Post-check summary\n")
-    summary = after.get("summary", {})
-    handle.write(f"- pass: {summary.get('pass', 0)}\n")
-    handle.write(f"- warn: {summary.get('warn', 0)}\n")
-    handle.write(f"- fail: {summary.get('fail', 0)}\n")
-
-print(out_json)
-print(out_md)
-PY
-}
-
 case "$mode" in
   check)
     raw="${base}.raw"
@@ -456,31 +289,4 @@ PY
     echo "- $md"
     ;;
 
-  fix)
-    before_raw="${base}.before.raw"
-    before_json="${base}.before.json"
-    before_md="${base}.before.md"
-    actions_raw="${base}.actions.raw"
-    after_raw="${base}.after.raw"
-    after_json="${base}.after.json"
-    after_md="${base}.after.md"
-    fix_json="${base}.fix.json"
-    fix_md="${base}.fix.md"
-
-    run_remote_check "$before_raw"
-    build_check_reports "$before_raw" "$before_json" "$before_md" "$host"
-
-    run_remote_fix "$actions_raw"
-
-    run_remote_check "$after_raw"
-    build_check_reports "$after_raw" "$after_json" "$after_md" "$host"
-
-    build_fix_reports "$before_json" "$after_json" "$actions_raw" "$fix_json" "$fix_md"
-
-    echo "Done. Artifacts:"
-    echo "- $fix_json"
-    echo "- $fix_md"
-    echo "- $before_json"
-    echo "- $after_json"
-    ;;
 esac

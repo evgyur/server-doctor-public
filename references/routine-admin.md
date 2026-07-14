@@ -115,7 +115,6 @@ From the repo root:
 
 ```bash
 ./scripts/doctor-mvp.sh check <host-alias-or-user@ip> [output_dir]
-./scripts/doctor-mvp.sh fix <host-alias-or-user@ip> [output_dir]
 ./scripts/doctor-mvp.sh preflight <host-alias-or-user@ip> [output_dir]
 ```
 
@@ -123,4 +122,4 @@ From the repo root:
 
 - `server-doctor-*.md`
 - `server-doctor-*.json`
-- for `fix`: before/after plus consolidated `*.fix.md` and `*.fix.json`
+- repairs are intentionally outside this diagnostic helper and require an approved, service-specific runbook

@@ -56,31 +56,28 @@ Use one of these labels when possible:
 - `direct process`
 - `tmux / screen managed`
 
-## OpenClaw tenant and agent identity guard
+## Tenant and agent identity guard
 
-When one host carries a primary tenant and an isolated development tenant, keep tenant identity separate from agent identity.
+When a host has both a primary tenant and an isolated development tenant, do not reuse the development tenant label as an agent identifier inside the primary tenant.
 
-Portable contract:
+Public-safe pattern:
 
-- each tenant has a distinct runtime owner, state directory, gateway, and transport identity;
-- agent ids are unique inside a tenant and do not reuse another tenant's label;
-- session keys in the primary state store must not reference the isolated tenant;
-- validation commands receive tenant paths and expected agent ids as explicit inputs.
+- each tenant has its own runtime owner, state directory, gateway, and bot identity;
+- agent identifiers are unique within the tenant that owns them;
+- session keys must resolve to an agent that exists in the same tenant;
+- tests and operator commands accept tenant, owner, state directory, and agent id as explicit inputs instead of embedding a real deployment map.
 
-Validation pattern:
+Validation template:
 
 ```bash
-PRIMARY_STATE_DIR="${PRIMARY_STATE_DIR:?set primary state dir}"
-ISOLATED_STATE_DIR="${ISOLATED_STATE_DIR:?set isolated state dir}"
-ISOLATED_AGENT_ID="${ISOLATED_AGENT_ID:?set isolated agent id}"
+rg -n 'agent:<development-agent>|"id": "<development-agent>"' \
+  <primary-state-dir>/openclaw.json <primary-state-dir>/agents
 
-rg -n --fixed-strings "$ISOLATED_AGENT_ID" \
-  "$PRIMARY_STATE_DIR/openclaw.json" "$PRIMARY_STATE_DIR/agents" || true
-
-test -f "$ISOLATED_STATE_DIR/openclaw.json"
+sudo -n -u <development-runtime-user> \
+  openclaw --state-dir <development-state-dir> status --deep
 ```
 
-If the first command finds active session keys from the isolated tenant under the primary tenant, back up the primary session index and archive only those stale entries. Do not delete the full state store.
+If the primary tenant contains active session keys for an agent owned only by the development tenant, archive those stale entries before testing the intended primary route. Never copy a private tenant inventory into this public reference.
 
 ## Example, sanitized
 
