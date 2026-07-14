@@ -46,10 +46,25 @@ sudo systemctl restart ssh || sudo systemctl restart sshd
 sudo grep -E '^(PermitRootLogin|PasswordAuthentication)' /etc/ssh/sshd_config
 ```
 
+Socket-activation trap:
+
+- some distributions can accept SSH through `ssh.socket` while `ssh.service` is inactive or tracks no real daemon PID;
+- after changing `AddressFamily`, `ListenAddress`, or authentication policy, inspect both units and the actual listener;
+- never close the bootstrap session until a second key-authenticated operator session succeeds.
+
+```bash
+sudo systemctl status ssh.socket ssh.service --no-pager -l
+sudo systemctl show ssh.service -p MainPID -p ActiveState -p SubState
+sudo ss -ltnp '( sport = :22 )'
+```
+
+If socket activation conflicts with the intended listener policy, migrate deliberately: disable the socket, enable the service, and verify a real `MainPID` plus a fresh second SSH session. A bound port by itself is not enough evidence that the intended SSH configuration owns the listener.
+
 Acceptance:
 
 - the new user can login by key
 - root SSH and password SSH are disabled
+- the intended socket/service owns the listener and a second operator session works
 
 ## Stage 3: Security Baseline
 

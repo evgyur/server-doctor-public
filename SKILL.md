@@ -39,6 +39,10 @@ Use them to keep doctrine, runbooks, overlays, incident memory, and command entr
 
 When delegating server work to Claude Code, Codex, subagents, or another ops/coding agent, first read `references/agent-tasking-for-server-ops.md`. It defines the public-safe task contract: raw evidence, target/access path, root-cause-first investigation, minimal mutation, debug reset, and proof before “fixed”.
 
+For a live service deployed from Git, read `references/repo-backed-runtime-update-workflow.md` before updating. It covers live-checkout proof, dirty-state backup, disposable-worktree integration, ancestry checks, detached restart, and end-to-end verification without exposing private fork details.
+
+Before moving any lesson from a private runbook or incident into this repository, read `references/public-sanitization-checklist.md` and run `scripts/check-public-safety.py` against the added lines.
+
 ## Non-negotiable warning
 
 This skill is severely limited without access to the relevant bots, servers, containers, or local project directories.
@@ -411,9 +415,13 @@ Core doctrine:
 Platform runbooks:
 - `references/openclaw-incident-response.md`
 - `references/openclaw-update-workflow.md`
+- `references/repo-backed-runtime-update-workflow.md`
 - `references/openclaw-taskflow-ops.md`
 - `references/security-forensics.md`
 - `references/onboarding.md`
+
+Public boundary:
+- `references/public-sanitization-checklist.md`
 
 Environment overlays:
 - `references/hosts-inventory.md`

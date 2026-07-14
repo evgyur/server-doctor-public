@@ -1277,6 +1277,57 @@ find ~/.openclaw/extensions -maxdepth 3 -type f -mmin -120 2>/dev/null
 - the maintained source contains the same general fix
 - a future update/deploy path will not silently drop the change
 
+### 19. Stale session lane without a live worker
+
+#### Symptoms
+
+- one chat or task lane stays `running` long after its transcript stopped changing;
+- no adjacent lock or lease is active;
+- no worker or child process corresponds to the lane;
+- other lanes on the same gateway remain healthy.
+
+Also inspect completed entries. A `done` lane with pending final delivery, repeated delivery retries, no live lock, and stale runtime metadata can keep retrying or create misleading residue.
+
+#### Recovery
+
+- prove the lane is stale from transcript age, lock/lease state, process tree, and recent logs;
+- back up the session index plus only the matching transcript or trajectory artifacts;
+- stop the owning runtime if the store cannot be edited safely while live;
+- remove or archive only the exact stale entry; never wipe the full state directory;
+- restart the minimum runtime and send a fresh probe through the affected lane.
+
+#### Validation
+
+- the lane receives a new session or clean state;
+- a fresh user-visible reply arrives;
+- no unrelated session entries changed;
+- retry or restart churn does not resume.
+
+### 20. Cross-tenant symlink or traversal failure
+
+#### Symptoms
+
+- logs show `EACCES` or `permission denied` while statting a skill, plugin, workspace, or config path;
+- the failing path is a symlink into another Unix user's home or tenant root;
+- transport and provider health are otherwise normal.
+
+#### Recovery
+
+- inspect the symlink target, ownership, and execute/traverse permission on every parent directory;
+- confirm whether the consuming tenant is supposed to access that target at all;
+- if the link is stale or unauthorized, archive or remove only the consumer-side link;
+- do not widen another tenant's home permissions as a shortcut;
+- if sharing is intentional, move the shared artifact to an explicit shared root with least-privilege ownership and a documented update path.
+
+#### Validation
+
+- the watcher or runtime stops emitting the permission error;
+- the consumer loads only its intended local or shared artifacts;
+- the other tenant's home and private state remain inaccessible;
+- the same user-facing probe succeeds without global permission changes.
+
+For webhook-versus-polling failures that appear after an update, use `references/openclaw-update-workflow.md` and prove both inbound and outbound paths; a connected status alone is insufficient.
+
 ## What to avoid
 
 - do not rotate secrets during first response unless compromise is suspected

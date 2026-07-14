@@ -38,6 +38,8 @@ Server Doctor follows a root-cause-first workflow:
 6. Verify with command output, logs, health checks, and a rollback path.
 7. Convert reusable lessons back into public-safe runbooks or tests.
 
+For Git-backed live runtimes, use `references/repo-backed-runtime-update-workflow.md`. Before publishing a lesson derived from private operations, use `references/public-sanitization-checklist.md` and scan only added lines so matched values are never printed.
+
 ## Quick start
 
 Clone the repo:
@@ -63,6 +65,7 @@ Run a placement/review check when editing docs:
 
 ```bash
 python3 scripts/review_placement.py
+python3 scripts/check-public-safety.py --staged
 ```
 
 ## Example agent prompt
@@ -149,6 +152,7 @@ Before opening a PR:
 ```bash
 npm test
 python3 scripts/review_placement.py
+python3 scripts/check-public-safety.py --staged
 ```
 
 Also scan your diff for private data before pushing.

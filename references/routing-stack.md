@@ -7,6 +7,7 @@ Choose one primary class:
 - access / host targeting
 - generic host audit
 - OpenClaw update
+- repository-backed runtime update
 - OpenClaw incident
 - topology / ownership
 - host-specific ops
@@ -19,6 +20,7 @@ Pick the minimal doctrine anchor that governs the task:
 - generic audit -> `references/openclaw-host-audit.md`
 - generic baseline checks -> `references/routine-admin.md`
 - outage wording -> `references/outage-classification.md`
+- public/private boundary -> `references/public-sanitization-checklist.md`
 
 ## Step 3. Read one runbook
 Pick the smallest platform runbook that matches the class.
@@ -26,6 +28,7 @@ Pick the smallest platform runbook that matches the class.
 Typical runbooks:
 - `references/openclaw-incident-response.md`
 - `references/openclaw-update-workflow.md`
+- `references/repo-backed-runtime-update-workflow.md`
 - `references/security-forensics.md`
 - `references/onboarding.md`
 - `references/openclaw-taskflow-ops.md`
