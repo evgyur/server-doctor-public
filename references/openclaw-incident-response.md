@@ -554,13 +554,15 @@ Some hosts end up with more than one OpenClaw install tree after partial updates
 #### Checks
 
 ```bash
-command -v openclaw
-readlink -f "$(command -v openclaw)"
-readlink -f /usr/local/bin/openclaw 2>/dev/null || true
-readlink -f /opt/node-v22.22.0/bin/openclaw 2>/dev/null || true
-openclaw --version
-/usr/local/bin/openclaw --version 2>/dev/null || true
-/opt/node-v22.22.0/bin/openclaw --version 2>/dev/null || true
+OPENCLAW_CANDIDATES=(
+  "$(command -v openclaw)"
+  "${OPENCLAW_ALT_BIN:-}"
+)
+for candidate in "${OPENCLAW_CANDIDATES[@]}"; do
+  [[ -n "$candidate" ]] || continue
+  readlink -f "$candidate" 2>/dev/null || true
+  "$candidate" --version 2>/dev/null || true
+done
 systemctl --user show openclaw-gateway -p ExecStart
 ```
 
@@ -573,7 +575,9 @@ systemctl --user show openclaw-gateway -p ExecStart
 Example fix pattern:
 
 ```bash
-ln -sf /opt/node-v22.22.0/bin/openclaw ~/.npm-global/bin/openclaw
+CANONICAL_OPENCLAW_BIN="${CANONICAL_OPENCLAW_BIN:?set canonical OpenClaw binary}"
+mkdir -p "$HOME/.local/bin"
+ln -sf "$CANONICAL_OPENCLAW_BIN" "$HOME/.local/bin/openclaw"
 systemctl --user daemon-reload
 systemctl --user restart openclaw-gateway
 ```

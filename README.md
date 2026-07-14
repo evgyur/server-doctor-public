@@ -24,7 +24,7 @@ Use this repo if you maintain or operate:
 - `incidents/` — sanitized incident lessons and failure patterns
 - `scripts/` — public-safe helper scripts for audits, hygiene checks, transport hotfixes, and command-layer operations
 - `tests/` — regression tests for scripts and operational guardrails
-- `tools/chip-docs-local/` — local documentation tooling used by the public docs workflow
+- `references/openclaw-docs/` — a provenance-labelled upstream documentation snapshot, excluded from the authored privacy gate
 
 ## Core operating model
 
@@ -38,7 +38,7 @@ Server Doctor follows a root-cause-first workflow:
 6. Verify with command output, logs, health checks, and a rollback path.
 7. Convert reusable lessons back into public-safe runbooks or tests.
 
-For Git-backed live runtimes, use `references/repo-backed-runtime-update-workflow.md`. Before publishing a lesson derived from private operations, use `references/public-sanitization-checklist.md` and scan only added lines so matched values are never printed.
+For Git-backed live runtimes, use `references/repo-backed-runtime-update-workflow.md`. Before publishing a lesson derived from private operations, use `references/public-sanitization-checklist.md`. Run both the strict authored-tree gate and the added-line gate; findings never print matched values.
 
 ## Quick start
 
@@ -65,6 +65,7 @@ Run a placement/review check when editing docs:
 
 ```bash
 python3 scripts/review_placement.py
+python3 scripts/check-public-safety.py --authored
 python3 scripts/check-public-safety.py --staged
 ```
 

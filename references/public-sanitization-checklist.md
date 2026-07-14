@@ -67,15 +67,16 @@ If the answer exposes private topology without improving the reusable procedure,
 - Keep generated runtime state, caches, reports, and local config out of Git.
 - Test both a clean fixture and representative leak-shaped fixtures.
 
-## Added-line scan
+## Two-layer scan
 
-Before commit, stage the intended files and run:
+Before commit, run the strict authored-tree gate, then stage the intended files and scan additions:
 
 ```bash
+python3 scripts/check-public-safety.py --authored
 python3 scripts/check-public-safety.py --staged
 ```
 
-The scanner checks only newly added lines plus whole untracked files, so historical public examples do not hide new regressions. It reports rule names without echoing matched values.
+The authored gate scans every tracked project-authored file and excludes only the provenance-labelled upstream docs snapshot. The staged gate checks newly added lines plus whole untracked files. Both report rule names without echoing matched values.
 
 For a clean-room file before staging:
 

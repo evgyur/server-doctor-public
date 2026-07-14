@@ -378,18 +378,11 @@ When the target is a macOS LaunchAgent install, include these checks after any `
 - inspect live launchd env for `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` drift and verify `NO_PROXY` still covers `api.telegram.org`
 - verify `openclaw status --deep` rather than trusting only `gateway status`, because RPC can stay green while Telegram is degraded
 
-### Public OpenClaw docs mirror
+### Public OpenClaw docs snapshot
 
-Prefer a local Markdown mirror of `https://docs.openclaw.ai` before falling back to live browsing when the repo checkout is available.
+Prefer the vendored Markdown snapshot of `https://docs.openclaw.ai` before falling back to live browsing when the repo checkout is available.
 
-Tooling:
-
-- submodule: `tools/chip-docs-local`
-- source manifest: `sources/openclaw.yaml`
-- refresh command from the repo root: `npm run sync-openclaw-docs`
-- materialized snapshot root: `references/openclaw-docs/`
-
-Expected mirror artifacts:
+Snapshot artifacts:
 
 - `references/openclaw-docs/current/`
 - `references/openclaw-docs/FILELIST.md`
@@ -397,12 +390,11 @@ Expected mirror artifacts:
 
 Operating rules:
 
-- if `tools/chip-docs-local` is missing, say that the local docs toolchain is unavailable instead of pretending the mirror exists
-- if dependencies are not installed in the submodule, run `npm --prefix tools/chip-docs-local install` before the sync command
-- use the local mirror as the default documentation source during diagnosis when it is present and fresh enough for the task
-- check `references/openclaw-docs/FILELIST.md` first for page discovery
-- if the mirror is missing or stale and local shell access exists, refresh it with `npm run sync-openclaw-docs`
-- if the refresh fails, say so plainly and fall back to live public docs
+- treat the snapshot as upstream/vendored material, separate from authored Server Doctor doctrine;
+- check `references/openclaw-docs/FILELIST.md` first for page discovery;
+- verify snapshot freshness from `state.json` before relying on version-sensitive details;
+- if the snapshot is missing or stale, say so plainly and use the live public documentation;
+- do not add a private documentation submodule or operator-specific refresh dependency to this public repository.
 
 Load these references when needed:
 

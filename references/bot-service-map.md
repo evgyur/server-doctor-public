@@ -58,34 +58,29 @@ Use one of these labels when possible:
 
 ## OpenClaw tenant and agent identity guard
 
-When a host has both a main bot tenant and a separate development bot tenant, do not reuse the development tenant name as an agent id inside the main tenant.
+When one host carries a primary tenant and an isolated development tenant, keep tenant identity separate from agent identity.
 
-Confirmed public-safe pattern:
+Portable contract:
 
-- main tenant on the shared host:
-  - runtime owner: `chip`
-  - main coding agent id: `chipcoder`
-  - `chipdev` should not appear as an active agent id or Telegram session key in this tenant
-- development tenant on the same host:
-  - runtime owner: `chipdev`
-  - separate OpenClaw state directory and gateway
-  - this is the `chipdev` bot/tenant, not the `chipcoder` agent inside the main tenant
+- each tenant has a distinct runtime owner, state directory, gateway, and transport identity;
+- agent ids are unique inside a tenant and do not reuse another tenant's label;
+- session keys in the primary state store must not reference the isolated tenant;
+- validation commands receive tenant paths and expected agent ids as explicit inputs.
 
 Validation pattern:
 
 ```bash
-rg -n 'agent:chipdev|"id": "chipdev"|chipdev' \
-  /home/chip/.openclaw/openclaw.json /home/chip/.openclaw/agents
+PRIMARY_STATE_DIR="${PRIMARY_STATE_DIR:?set primary state dir}"
+ISOLATED_STATE_DIR="${ISOLATED_STATE_DIR:?set isolated state dir}"
+ISOLATED_AGENT_ID="${ISOLATED_AGENT_ID:?set isolated agent id}"
 
-sudo -n -u chipdev python3 - <<'PY'
-import json, pathlib
-cfg = json.loads(pathlib.Path('/home/chipdev/.openclaw/openclaw.json').read_text())
-print(cfg.get('agents', {}).get('defaults', {}).get('model'))
-print(cfg.get('agents', {}).get('defaults', {}).get('agentRuntime'))
-PY
+rg -n --fixed-strings "$ISOLATED_AGENT_ID" \
+  "$PRIMARY_STATE_DIR/openclaw.json" "$PRIMARY_STATE_DIR/agents" || true
+
+test -f "$ISOLATED_STATE_DIR/openclaw.json"
 ```
 
-If the first command finds active `agent:chipdev` session keys under the main tenant, archive those stale entries before testing the `chipcoder` route.
+If the first command finds active session keys from the isolated tenant under the primary tenant, back up the primary session index and archive only those stale entries. Do not delete the full state store.
 
 ## Example, sanitized
 

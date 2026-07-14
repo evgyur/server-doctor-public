@@ -25,6 +25,8 @@ jobs:
         run: npm test
       - name: Review documentation placement
         run: python3 scripts/review_placement.py
+      - name: Scan authored public layer
+        run: python3 scripts/check-public-safety.py --authored
       - name: Scan added lines for private data
         shell: bash
         run: |

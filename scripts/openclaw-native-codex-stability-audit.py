@@ -9,6 +9,7 @@ gateway.
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import subprocess
 import time
@@ -306,7 +307,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--state-dir", type=Path, default=Path.home() / ".openclaw")
     parser.add_argument("--config", type=Path)
-    parser.add_argument("--owner", default="chip")
+    parser.add_argument("--owner", default=getpass.getuser())
     parser.add_argument("--expected-model", default="openai/gpt-5.5")
     parser.add_argument("--expected-concurrency", type=int, default=1)
     parser.add_argument("--codex-port", default="39175")

@@ -16,7 +16,7 @@
 
 **Files:**
 - Modify: `server-doctor-public/SKILL.md`
-- Verify: `cat /mnt/c/Users/user/.github/server-doctor-public/SKILL.md`
+- Verify: `$REPO_ROOT/SKILL.md`
 
 - [ ] **Step 1: Compare the current skill against the approved spec**
 
@@ -61,7 +61,7 @@ Ensure the output explicitly includes:
 
 - [ ] **Step 5: Verify the final skill text**
 
-Run: `cat /mnt/c/Users/user/.github/server-doctor-public/SKILL.md`
+Run: inspect `$REPO_ROOT/SKILL.md`.
 Expected:
 - intake covers hosts, bots, runtimes, owners, directories or service identifiers, and safe access methods
 - preflight appears before generic diagnostics
