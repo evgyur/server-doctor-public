@@ -81,6 +81,37 @@ and require clean post-restart health plus an end-to-end probe.
 - product-native health/watchdog signals confused with separate host-local restart automation
 - local hooks that synchronously call back into the same gateway through `openclaw infer --gateway`
 
+## Dependent sidecar readiness
+
+When the gateway depends on a local sidecar, declare the dependency instead of relying on restart timing.
+
+Healthy contract:
+
+- the sidecar is started before the gateway through normal service-manager ordering;
+- a bounded readiness probe confirms its socket or health endpoint before gateway start;
+- the gateway and sidecar are independently restartable;
+- the gateway's `ExecStartPre` does not restart the same dependency that participates in its start transaction;
+- recovery restarts the smallest failing component first.
+
+Prefer `Requires=`/`After=` plus a bounded readiness helper. If a custom `ExecStartPre` restart causes immediate termination or start-transaction churn, remove that choreography and restart the dependency as a separate operator step.
+
+Verify the dependency listener, gateway listener, both service states, and a real gateway-backed request after the restart window. A CLI-only sidecar smoke is insufficient when the user-facing path depends on the gateway.
+
+## Webhook versus polling after updates
+
+`connected=true` proves only that part of the transport initialized. It does not prove that inbound updates reach the canonical runtime or that outbound replies return to the user.
+
+When a messaging lane is silent after an update:
+
+1. determine whether the live bot uses webhook or polling;
+2. for webhook mode, inspect the configured public URL, authoritative DNS, TLS, reverse proxy route, and application access logs;
+3. for polling mode, rule out duplicate pollers and inspect recent fetch outcomes and pending updates;
+4. correlate one fresh inbound message with gateway logs/session state;
+5. correlate one outbound reply with the platform result;
+6. only then classify transport health or restart the gateway.
+
+Do not publish the real webhook URL, bot token, chat ID, DNS inventory, or access-log payload. Public incident notes should describe the failed boundary and the probes, not the private route.
+
 ## macOS-specific checks
 After updates on LaunchAgent installs, inspect:
 - `ProgramArguments`

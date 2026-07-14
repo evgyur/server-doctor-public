@@ -43,6 +43,49 @@ docker logs --tail 200 <container>
 docker compose ps
 ```
 
+### Post-upgrade completion gate
+
+Use this after OS package, kernel, Docker Engine, or container-runtime upgrades. A completed package-manager command is not proof that the host returned to a durable healthy state.
+
+```bash
+uname -r
+test -f /var/run/reboot-required && cat /var/run/reboot-required
+test -f /var/run/reboot-required.pkgs && cat /var/run/reboot-required.pkgs
+sudo needrestart -b -r l 2>/dev/null || true
+sudo apt-get -s upgrade
+systemctl --failed --no-pager
+sudo docker ps -a
+sudo docker inspect --format '{{.Name}} restart={{.HostConfig.RestartPolicy.Name}} status={{.State.Status}}' $(sudo docker ps -aq)
+sudo docker compose ls
+```
+
+Interpretation:
+
+- a running old kernel plus `reboot-required` needs a scheduled reboot, not repeated service restarts;
+- phased or held packages must be reported as deferred, not silently counted as upgraded;
+- a Docker daemon restart may leave required containers stopped when their restart policy is empty or `no`;
+- inspect failed units and stopped workload containers before declaring maintenance complete;
+- after reboot, repeat the service, listener, and end-to-end probes that mattered before the upgrade.
+
+### Prevent suspend on unattended server hosts
+
+On dedicated hosts that must remain reachable, inspect sleep policy before assuming an unexplained disappearance is a crash:
+
+```bash
+systemctl status sleep.target suspend.target hibernate.target hybrid-sleep.target --no-pager
+loginctl show-logind 2>/dev/null || true
+journalctl -b | grep -E 'suspend|hibernate|sleep' | tail -n 100
+```
+
+If the workload contract forbids sleep, use a small `logind` drop-in and mask the sleep targets through the host's normal configuration-management path. Preserve the previous config first.
+
+Verification must include:
+
+- sleep targets show `masked` when masking is the selected policy;
+- `systemctl --failed` remains clean;
+- the host stays reachable past the previous idle/suspend interval;
+- application and operator-facing probes still pass after that interval.
+
 ### nginx
 
 ```bash
